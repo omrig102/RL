@@ -54,12 +54,14 @@ class PPO() :
     def buildCriticNetwork(self) :
         critic_input = Input(shape=self.env.getInputSize())
         current_layer = critic_input
-        if(self.env.use_pixels) :
+        if(self.env.use_pixels and Config.use_conv_layers) :
             normalize_1 = BatchNormalization()(critic_input)
             conv_1 = Conv2D(filters=32,kernel_size=[3,3],activation='relu')(normalize_1)
             conv_2 = Conv2D(filters=32,kernel_size=[3,3],activation='relu')(conv_1)
             flatten = Flatten()(conv_2)
             current_layer = BatchNormalization()(flatten)
+        elif(not Config.use_conv_layers) :
+            current_layer = Reshape(target_shape=[self.env.getInputSize()[0] * self.env.getInputSize()[1]])(current_layer)
         for _ in range(Config.hidden_size) :
             current_layer = Dense(units=Config.hidden_units,activation='tanh')(current_layer)
         critic_output = Dense(units=1,activation='linear')(current_layer)
@@ -74,12 +76,14 @@ class PPO() :
         old_actions_probs = Input(shape=[self.env.getOutputSize()])
         state = Input(shape=self.env.getInputSize())
         current_layer = state
-        if(self.env.use_pixels) :
-            normalize_1 = BatchNormalization()(state)
+        if(self.env.use_pixels and Config.use_conv_layers) :
+            normalize_1 = BatchNormalization()(current_layer)
             conv_1 = Conv2D(filters=32,kernel_size=[3,3],activation='relu')(normalize_1)
             conv_2 = Conv2D(filters=32,kernel_size=[3,3],activation='relu')(conv_1)
             flatten = Flatten()(conv_2)
             current_layer = BatchNormalization()(flatten)
+        elif(not Config.use_conv_layers) :
+            current_layer = Reshape(target_shape=[self.env.getInputSize()[0] * self.env.getInputSize()[1]])(current_layer)
         
         for _ in range(Config.hidden_size) :
             current_layer = Dense(units=Config.hidden_units,activation='tanh')(current_layer)

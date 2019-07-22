@@ -21,6 +21,7 @@ class Config() :
     hidden_units = 128
     critic_learning_rate = 0.0001
     actor_learning_rate = 0.0001
+    use_conv_layers = True
     #env = MarioEnvironment('SuperMarioBros-v0',13,13,use_pixels=True,is_discrete=True,save_video_interval=5)
     env = GymEnvironment('Bowling-v0',13,13,use_pixels=True,is_discrete=True,save_video_interval=5)
     
