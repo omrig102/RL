@@ -61,7 +61,7 @@ class PPO() :
             flatten = Flatten()(conv_2)
             current_layer = BatchNormalization()(flatten)
         for _ in range(Config.hidden_size) :
-            current_layer = Dense(units=Config.hidden_units,activation='relu')(current_layer)
+            current_layer = Dense(units=Config.hidden_units,activation='tanh')(current_layer)
         critic_output = Dense(units=1,activation='linear')(current_layer)
 
         model = Model(critic_input,critic_output)
@@ -82,7 +82,7 @@ class PPO() :
             current_layer = BatchNormalization()(flatten)
         
         for _ in range(Config.hidden_size) :
-            current_layer = Dense(units=Config.hidden_units,activation='relu')(current_layer)
+            current_layer = Dense(units=Config.hidden_units,activation='tanh')(current_layer)
         
         actor_outputs = Dense(units=self.env.getOutputSize())(current_layer)
 
