@@ -23,5 +23,5 @@ class Config() :
     actor_learning_rate = 0.0001
     use_conv_layers = True
     #env = MarioEnvironment('SuperMarioBros-v0',13,13,use_pixels=True,is_discrete=True,save_video_interval=5)
-    env = GymEnvironment('Bowling-v0',13,13,use_pixels=True,stack_size=7,is_discrete=True,save_video_interval=5)
+    env = GymEnvironment('Bowling-v0',48,48,use_pixels=True,stack_size=4,is_discrete=True,save_video=True,save_video_interval=50)
     
