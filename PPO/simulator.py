@@ -26,8 +26,7 @@ def simulate() :
         env.render()
         #time.sleep(0.02)
         state = env.preprocess(state,next_state)
-        state = np.expand_dims(state,0)
-        action_probs = model.predict(state)
+        action_probs = model.predict(np.expand_dims(state,0))
         action_probs = action_probs.reshape([action_probs.shape[1]])
         if(env.is_discrete) :
             action = np.random.choice(range(len(action_probs)),p=action_probs)
