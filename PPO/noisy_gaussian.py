@@ -5,23 +5,25 @@ from keras.layers import GaussianNoise
 import numpy as np
 import tensorflow as tf
 
-
 class NoisyGaussian(Layer):
 
-    def __init__(self, stddev,training,**kwargs):
+    def __init__(self, stddev,interval,**kwargs):
         super(NoisyGaussian, self).__init__(**kwargs)
         self.supports_masking = True
         self.stddev = stddev
-        self.training = training
+        self.interval = interval
+        self.counter = 0
 
-    def call(self, inputs):
+    def call(self, inputs,training=None):
         def noised():
             return inputs + K.random_normal(shape=K.shape(inputs),
                                             mean=0.,
                                             stddev=self.stddev)
-        res = K.in_train_phase(noised, inputs, training=self.training)
-        
-        return res
+        self.counter += 1
+        if(self.counter % self.interval == 0) :
+            res = K.in_train_phase(noised, inputs, training)
+            return res
+        return inputs
 
     def get_config(self):
         config = {'stddev': self.stddev}
