@@ -5,7 +5,6 @@ import keras.backend as K
 from config import Config
 from termcolor import colored
 import numpy as np
-from scipy import signal
 import os
 import tensorflow as tf
 import math
@@ -129,14 +128,13 @@ class PPO() :
     def updateRewards(self,rewards,done) :
         return self.getDiscountedRewards(rewards,done)
 
-    def collectBatch(self,state,stacked,total_rewards,episode) :
+    def collectBatch(self,state,next_state,total_rewards,episode) :
         states = []
         batch_states = []
         rewards = []
         batch_rewards = []
         batch_actions_probs = []
         mask = []
-        next_state = None
         for step in range(Config.buffer_size) :
             state = self.env.preprocess(state,next_state)
             states.append(state) 
@@ -170,7 +168,6 @@ class PPO() :
                 episode += 1
                 state = self.env.reset()
                 next_state = None
-                stacked = False
 
         if(len(states) > 0) :
             rewards = self.updateRewards(rewards,False)
@@ -186,15 +183,15 @@ class PPO() :
             end = True
         else :
             end = False
-        return batch,end,episode,total_rewards,state,stacked
+        return batch,end,episode,total_rewards,state,next_state
 
     def run(self) :
         state = self.env.reset()
-        stacked = False
+        next_state = None
         total_rewards = 0
         episode = 0
         while(True) :
-            batch,end,episode,total_rewards,state,stacked = self.collectBatch(state,stacked,total_rewards,episode)
+            batch,end,episode,total_rewards,state,next_state = self.collectBatch(state,next_state,total_rewards,episode)
             self.updateNetworks(batch)
             if(end) :
                 break
