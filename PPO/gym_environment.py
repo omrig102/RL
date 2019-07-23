@@ -15,8 +15,8 @@ class GymEnvironment(Environment) :
 
     def initialize(self) :
         self.env = gym.make(self.game)
-        #if(self.save_video) :
-        #    self.env = Monitor(self.env,self.root_dir + "/videos",video_callable=lambda episode_id : True if(episode_id % self.save_video_interval == 0) else False,force=True)
+        if(self.save_video) :
+            self.env = Monitor(self.env,self.root_dir + "/videos",video_callable=lambda episode_id : True if(episode_id % self.save_video_interval == 0) else False,force=True)
 
     def clone(self,simulator=False) :
         if(simulator) :
