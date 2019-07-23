@@ -55,15 +55,15 @@ class PPO() :
         critic_input = Input(shape=self.env.getInputSize())
         current_layer = critic_input
         if(self.env.use_pixels and Config.use_conv_layers) :
-            normalize_1 = BatchNormalization()(critic_input)
-            conv_1 = Conv2D(filters=32,kernel_size=[3,3],activation='relu')(normalize_1)
-            conv_2 = Conv2D(filters=32,kernel_size=[3,3],activation='relu')(conv_1)
-            flatten = Flatten()(conv_2)
-            current_layer = BatchNormalization()(flatten)
+            #normalize_1 = BatchNormalization()(critic_input)
+            current_layer = Conv2D(filters=32,kernel_size=[3,3],activation='relu')(current_layer)
+            current_layer = Conv2D(filters=32,kernel_size=[3,3],activation='relu')(current_layer)
+            current_layer = Flatten()(current_layer)
+            current_layer = BatchNormalization()(current_layer)
         elif(not Config.use_conv_layers) :
             current_layer = Reshape(target_shape=[self.env.getInputSize()[0] * self.env.getInputSize()[1]])(current_layer)
         for _ in range(Config.hidden_size) :
-            current_layer = Dense(units=Config.hidden_units,activation='tanh')(current_layer)
+            current_layer = Dense(units=Config.hidden_units,activation='relu')(current_layer)
         critic_output = Dense(units=1,activation='linear')(current_layer)
 
         model = Model(critic_input,critic_output)
@@ -77,16 +77,16 @@ class PPO() :
         state = Input(shape=self.env.getInputSize())
         current_layer = state
         if(self.env.use_pixels and Config.use_conv_layers) :
-            normalize_1 = BatchNormalization()(current_layer)
-            conv_1 = Conv2D(filters=32,kernel_size=[3,3],activation='relu')(normalize_1)
-            conv_2 = Conv2D(filters=32,kernel_size=[3,3],activation='relu')(conv_1)
-            flatten = Flatten()(conv_2)
-            current_layer = BatchNormalization()(flatten)
+            #normalize_1 = BatchNormalization()(current_layer)
+            current_layer = Conv2D(filters=32,kernel_size=[3,3],activation='relu')(current_layer)
+            current_layer = Conv2D(filters=32,kernel_size=[3,3],activation='relu')(current_layer)
+            current_layer = Flatten()(current_layer)
+            current_layer = BatchNormalization()(current_layer)
         elif(not Config.use_conv_layers) :
             current_layer = Reshape(target_shape=[self.env.getInputSize()[0] * self.env.getInputSize()[1]])(current_layer)
         
         for _ in range(Config.hidden_size) :
-            current_layer = Dense(units=Config.hidden_units,activation='tanh')(current_layer)
+            current_layer = Dense(units=Config.hidden_units,activation='relu')(current_layer)
         
         actor_outputs = Dense(units=self.env.getOutputSize())(current_layer)
 
@@ -129,16 +129,17 @@ class PPO() :
     def updateRewards(self,rewards,done) :
         return self.getDiscountedRewards(rewards,done)
 
-    def collectBatch(self,state,total_rewards,episode) :
+    def collectBatch(self,state,stacked,total_rewards,episode) :
         states = []
         batch_states = []
         rewards = []
         batch_rewards = []
         batch_actions_probs = []
         mask = []
+        next_state = None
         for step in range(Config.buffer_size) :
-            state = self.env.preprocess(state)
-            states.append(state)
+            state = self.env.preprocess(state,next_state)
+            states.append(state) 
             actions_probs = self.old_actor_model.predict([np.expand_dims(state,axis=0),self.dummy_old_actions_probs,self.dummy_advantage])
             actions_probs = actions_probs.reshape([actions_probs.shape[1]])
 
@@ -156,7 +157,6 @@ class PPO() :
             next_state,reward,done,_ = self.env.step(action)
             rewards.append(reward)
             total_rewards += reward
-            state = next_state
             if(done) :
                 batch_rewards += self.updateRewards(rewards,True)
                 batch_states += states
@@ -169,6 +169,8 @@ class PPO() :
                     self.save(episode)
                 episode += 1
                 state = self.env.reset()
+                next_state = None
+                stacked = False
 
         if(len(states) > 0) :
             rewards = self.updateRewards(rewards,False)
@@ -184,14 +186,15 @@ class PPO() :
             end = True
         else :
             end = False
-        return batch,end,episode,total_rewards,state
+        return batch,end,episode,total_rewards,state,stacked
 
     def run(self) :
         state = self.env.reset()
+        stacked = False
         total_rewards = 0
         episode = 0
         while(True) :
-            batch,end,episode,total_rewards,state = self.collectBatch(state,total_rewards,episode)
+            batch,end,episode,total_rewards,state,stacked = self.collectBatch(state,stacked,total_rewards,episode)
             self.updateNetworks(batch)
             if(end) :
                 break

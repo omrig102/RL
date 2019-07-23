@@ -10,8 +10,8 @@ from gym_environment import GymEnvironment
 
 class MarioEnvironment(GymEnvironment) :
 
-    def __init__(self,game,resized_height=0,resized_width=0,use_pixels=True,is_discrete=False,save_video=True,save_video_interval=30,root_dir='.') :
-        super().__init__(game,resized_height,resized_width,use_pixels,is_discrete,save_video,save_video_interval,root_dir)
+    def __init__(self,game,resized_height=0,resized_width=0,use_pixels=True,stack_size=1,is_discrete=False,save_video=True,save_video_interval=30,root_dir='.') :
+        super().__init__(game,resized_height,resized_width,use_pixels,stack_size,is_discrete,save_video,save_video_interval,root_dir)
 
     def initialize(self) :
         self.env = gym_super_mario_bros.make(self.game)
@@ -21,5 +21,5 @@ class MarioEnvironment(GymEnvironment) :
 
     def clone(self,simulator=False) :
         if(simulator) :
-            return MarioEnvironment(self.game,self.resized_height,self.resized_width,self.use_pixels,self.is_discrete,False,self.save_video_interval,self.root_dir)
-        return MarioEnvironment(self.game,self.resized_height,self.resized_width,self.use_pixels,self.is_discrete,self.save_video,self.save_video_interval,self.root_dir)
+            return MarioEnvironment(self.game,self.resized_height,self.resized_width,self.use_pixels,self.stack_size,self.is_discrete,False,self.save_video_interval,self.root_dir)
+        return MarioEnvironment(self.game,self.resized_height,self.resized_width,self.use_pixels,self.stack_size,self.is_discrete,self.save_video,self.save_video_interval,self.root_dir)
