@@ -1,14 +1,14 @@
 from keras.models import Model
-from keras.layers import Dense,Input,Add,GaussianNoise,Activation,BatchNormalization,Conv2D,Flatten,Reshape
+from keras.layers import Dense,Input,Add,GaussianNoise,Activation,Conv2D,Flatten,BatchNormalization,Reshape
 from keras.optimizers import Adam
 import keras.backend as K
 from config import Config
 from termcolor import colored
 import numpy as np
 from scipy import signal
+from noise import OrnsteinUhlenbeckActionNoise
 import os
 import tensorflow as tf
-import math
 
 #from pyvirtualdisplay import Display
 #display = Display(visible=0, size=(1400, 900))
@@ -25,11 +25,11 @@ def ppoLoss(advantage,old_actions_probs) :
 class PPO() :
 
     def __init__(self) :
-        K.set_learning_phase(1)
         config = tf.ConfigProto()
         config.gpu_options.allow_growth=True
         sess = tf.Session(config=config)
         K.set_session(sess)
+        #K.set_learning_phase(1)
         self.env = Config.env.clone()
         self.critic_model = self.buildCriticNetwork()
         self.actor_model = self.buildActorNetwork()
@@ -60,7 +60,7 @@ class PPO() :
             current_layer = Conv2D(filters=32,kernel_size=[3,3],activation='relu')(current_layer)
             current_layer = Flatten()(current_layer)
             current_layer = BatchNormalization()(current_layer)
-        elif(not Config.use_conv_layers) :
+        elif(self.env.use_pixels) :
             current_layer = Reshape(target_shape=[self.env.getInputSize()[0] * self.env.getInputSize()[1]])(current_layer)
         for _ in range(Config.hidden_size) :
             current_layer = Dense(units=Config.hidden_units,activation='relu')(current_layer)
@@ -82,7 +82,7 @@ class PPO() :
             current_layer = Conv2D(filters=32,kernel_size=[3,3],activation='relu')(current_layer)
             current_layer = Flatten()(current_layer)
             current_layer = BatchNormalization()(current_layer)
-        elif(not Config.use_conv_layers) :
+        elif(self.env.use_pixels) :
             current_layer = Reshape(target_shape=[self.env.getInputSize()[0] * self.env.getInputSize()[1]])(current_layer)
         
         for _ in range(Config.hidden_size) :
@@ -129,14 +129,13 @@ class PPO() :
     def updateRewards(self,rewards,done) :
         return self.getDiscountedRewards(rewards,done)
 
-    def collectBatch(self,state,stacked,total_rewards,episode) :
+    def collectBatch(self,state,next_state,total_rewards,episode) :
         states = []
         batch_states = []
         rewards = []
         batch_rewards = []
         batch_actions_probs = []
         mask = []
-        next_state = None
         for step in range(Config.buffer_size) :
             state = self.env.preprocess(state,next_state)
             states.append(state) 
@@ -170,7 +169,6 @@ class PPO() :
                 episode += 1
                 state = self.env.reset()
                 next_state = None
-                stacked = False
 
         if(len(states) > 0) :
             rewards = self.updateRewards(rewards,False)
@@ -186,15 +184,15 @@ class PPO() :
             end = True
         else :
             end = False
-        return batch,end,episode,total_rewards,state,stacked
+        return batch,end,episode,total_rewards,state,next_state
 
     def run(self) :
         state = self.env.reset()
-        stacked = False
+        next_state = None
         total_rewards = 0
         episode = 0
         while(True) :
-            batch,end,episode,total_rewards,state,stacked = self.collectBatch(state,stacked,total_rewards,episode)
+            batch,end,episode,total_rewards,state,next_state = self.collectBatch(state,next_state,total_rewards,episode)
             self.updateNetworks(batch)
             if(end) :
                 break

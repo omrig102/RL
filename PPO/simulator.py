@@ -8,7 +8,7 @@ import tensorflow as tf
 import time
 
 def simulate() :
-    env = Config.env.clone(simulator=True)
+    env = Config.env.clone()
     dummy_advantage = np.zeros((1, 1))
     dummy_old_actions_probs = np.zeros((1, env.getOutputSize()))
     episode = sys.argv[1]
@@ -20,11 +20,12 @@ def simulate() :
     model.load_weights(dir + 'actor_weights')
     model.summary()
     state = env.reset()
+    next_state = None
     total_rewards = 0
     while(True) :
         env.render()
         #time.sleep(0.02)
-        state = env.preprocess(state)
+        state = env.preprocess(state,next_state)
         state = np.expand_dims(state,0)
         action_probs = model.predict(state)
         action_probs = action_probs.reshape([action_probs.shape[1]])
@@ -35,7 +36,7 @@ def simulate() :
             action = action_probs[0]
         next_state,reward,done,_ = env.step(action)
         total_rewards += reward
-        state = next_state
+        #state = next_state
         if(done) :
             print('Game Ended! Total Rewards {}'.format(total_rewards))
             break
@@ -47,4 +48,3 @@ sess = tf.Session(config=config)
 K.set_session(sess)
 
 simulate()
-
