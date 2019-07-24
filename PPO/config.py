@@ -17,6 +17,7 @@ class Config() :
     gamma = 0.99
     lam = 0.97
     save_rate = 10
+    noise_interval = 128
     hidden_size = 3
     hidden_units = 128
     critic_learning_rate = 0.0001
