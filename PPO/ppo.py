@@ -6,7 +6,7 @@ from config import Config
 from termcolor import colored
 import numpy as np
 from scipy import signal
-from noise import OrnsteinUhlenbeckActionNoise
+from noisy_gaussian import NoisyGaussian
 import os
 import tensorflow as tf
 
@@ -29,7 +29,7 @@ class PPO() :
         config.gpu_options.allow_growth=True
         sess = tf.Session(config=config)
         K.set_session(sess)
-        #K.set_learning_phase(1)
+        K.set_learning_phase(1)
         self.env = Config.env.clone()
         self.critic_model = self.buildCriticNetwork()
         self.actor_model = self.buildActorNetwork()
@@ -91,7 +91,7 @@ class PPO() :
         actor_outputs = Dense(units=self.env.getOutputSize())(current_layer)
 
         if(add_noise) :
-            actor_outputs = GaussianNoise(stddev=0.1)(actor_outputs)
+            actor_outputs = NoisyGaussian(stddev=0.1,interval=Config.noise_interval)(actor_outputs)
         if(self.env.is_discrete) :
             activation = 'softmax'
             loss = ppoLoss(advantage=advantage,old_actions_probs=old_actions_probs)
