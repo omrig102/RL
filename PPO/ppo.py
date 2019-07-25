@@ -1,5 +1,5 @@
 from keras.layers import Dense,Input,Add,GaussianNoise,Activation,Conv2D,Flatten,BatchNormalization,Reshape
-
+from keras.models import Model
 from keras.optimizers import Adam
 import keras.backend as K
 from config import Config
