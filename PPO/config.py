@@ -23,6 +23,5 @@ class Config() :
     critic_learning_rate = 0.0001
     actor_learning_rate = 0.0001
     use_conv_layers = True
-    env = MarioEnvironment('SuperMarioBros-v0',48,48,use_pixels=True,stack_size=4,is_discrete=True,save_video_interval=5)
+env = MarioEnvironment('SuperMarioBros-v0',48,48,use_pixels=True,stack_size=4,is_discrete=True,save_video_interval=5)
     #env = GymEnvironment('LunarLander-v2',13,13,use_pixels=False,stack_size=4,is_discrete=True,save_video=True,save_video_interval=10)
-    

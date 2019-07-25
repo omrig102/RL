@@ -1,5 +1,5 @@
-from keras.models import Model
-from keras.layers import Dense,Input,Add,GaussianNoise,Activation,Conv2D,Reshape,Flatten
+from keras.layers import Dense,Input,Add,GaussianNoise,Activation,Conv2D,Flatten,BatchNormalization,Reshape
+
 from keras.optimizers import Adam
 import keras.backend as K
 from config import Config
@@ -28,6 +28,7 @@ class PPO() :
         config.gpu_options.allow_growth=True
         sess = tf.Session(config=config)
         K.set_session(sess)
+        K.set_learning_phase(1)
         self.env = Config.env.clone()
         self.critic_model = self.buildCriticNetwork()
         self.actor_model = self.buildActorNetwork()
