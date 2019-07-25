@@ -1,12 +1,11 @@
 from keras.models import Model
-from keras.layers import Dense,Input,Add,GaussianNoise,Activation,Conv2D,Flatten,BatchNormalization,Reshape
+from keras.layers import Dense,Input,Add,GaussianNoise,Activation,Conv2D,Reshape,Flatten
 from keras.optimizers import Adam
 import keras.backend as K
 from config import Config
 from termcolor import colored
 import numpy as np
-from scipy import signal
-from noisy_gaussian import NoisyGaussian
+from noisy_gaussian import NoisyDense
 import os
 import tensorflow as tf
 
@@ -19,7 +18,7 @@ def ppoLoss(advantage,old_actions_probs) :
         prob = y_true * y_pred
         old_prob = y_true * old_actions_probs
         r = prob/(old_prob + 1e-10)
-        return -K.mean(K.minimum(r * advantage, K.clip(r, min_value=1 - Config.epsilon, max_value=1 + Config.epsilon) * advantage) + Config.entropy * -(prob * K.log(prob + 1e-10)))
+        return -K.mean(K.minimum(r * advantage, K.clip(r, min_value=1 - Config.epsilon, max_value=1 + Config.epsilon) * advantage))
     return loss
 
 class PPO() :
@@ -29,7 +28,6 @@ class PPO() :
         config.gpu_options.allow_growth=True
         sess = tf.Session(config=config)
         K.set_session(sess)
-        K.set_learning_phase(1)
         self.env = Config.env.clone()
         self.critic_model = self.buildCriticNetwork()
         self.actor_model = self.buildActorNetwork()
@@ -56,10 +54,10 @@ class PPO() :
         current_layer = critic_input
         if(self.env.use_pixels and Config.use_conv_layers) :
             #normalize_1 = BatchNormalization()(critic_input)
-            current_layer = Conv2D(filters=32,kernel_size=[3,3],activation='relu')(current_layer)
-            current_layer = Conv2D(filters=32,kernel_size=[3,3],activation='relu')(current_layer)
+            current_layer = Conv2D(filters=48,kernel_size=[3,3],activation='relu')(current_layer)
+            current_layer = Conv2D(filters=48,kernel_size=[3,3],activation='relu')(current_layer)
             current_layer = Flatten()(current_layer)
-            current_layer = BatchNormalization()(current_layer)
+            #current_layer = BatchNormalization()(current_layer)
         elif(self.env.use_pixels) :
             current_layer = Reshape(target_shape=[self.env.getInputSize()[0] * self.env.getInputSize()[1]])(current_layer)
         for _ in range(Config.hidden_size) :
@@ -68,6 +66,7 @@ class PPO() :
 
         model = Model(critic_input,critic_output)
         model.compile(optimizer=Adam(lr=Config.critic_learning_rate),loss='mse')
+
 
         return model
 
@@ -78,20 +77,20 @@ class PPO() :
         current_layer = state
         if(self.env.use_pixels and Config.use_conv_layers) :
             #normalize_1 = BatchNormalization()(current_layer)
-            current_layer = Conv2D(filters=32,kernel_size=[3,3],activation='relu')(current_layer)
-            current_layer = Conv2D(filters=32,kernel_size=[3,3],activation='relu')(current_layer)
+            current_layer = Conv2D(filters=48,kernel_size=[3,3],activation='relu')(current_layer)
+            current_layer = Conv2D(filters=48,kernel_size=[3,3],activation='relu')(current_layer)
             current_layer = Flatten()(current_layer)
-            current_layer = BatchNormalization()(current_layer)
+            #current_layer = BatchNormalization()(current_layer)
         elif(self.env.use_pixels) :
             current_layer = Reshape(target_shape=[self.env.getInputSize()[0] * self.env.getInputSize()[1]])(current_layer)
         
         for _ in range(Config.hidden_size) :
             current_layer = Dense(units=Config.hidden_units,activation='relu')(current_layer)
         
-        actor_outputs = Dense(units=self.env.getOutputSize())(current_layer)
+        actor_outputs = NoisyDense(units=self.env.getOutputSize(),training=add_noise)(current_layer)
 
-        if(add_noise) :
-            actor_outputs = NoisyGaussian(stddev=0.1,interval=Config.noise_interval)(actor_outputs)
+        #if(add_noise) :
+        #    actor_outputs = GaussianNoise(stddev=0.1)(actor_outputs)
         if(self.env.is_discrete) :
             activation = 'softmax'
             loss = ppoLoss(advantage=advantage,old_actions_probs=old_actions_probs)
@@ -104,7 +103,7 @@ class PPO() :
         model = Model([state,old_actions_probs,advantage],actor_outputs)
 
         model.compile(optimizer=Adam(lr=Config.actor_learning_rate),loss=loss)
-    
+        
         return model
 
     def updateNetworks(self,batch) :
@@ -128,7 +127,6 @@ class PPO() :
 
     def updateRewards(self,rewards,done) :
         return self.getDiscountedRewards(rewards,done)
-
     def collectBatch(self,state,next_state,total_rewards,episode) :
         states = []
         batch_states = []

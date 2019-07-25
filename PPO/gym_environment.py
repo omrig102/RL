@@ -51,7 +51,7 @@ class GymEnvironment(Environment) :
             if(self.stack_size > 1) :
                 if(next_state is not None) :
                     frame = cv2.resize(next_state,(self.resized_width,self.resized_height))
-                    frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY) / 255
+                    frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
                     frame = frame.reshape([self.resized_width, self.resized_height])
                     stack = state[:,:,1:]
                     res = []
@@ -63,14 +63,14 @@ class GymEnvironment(Environment) :
                     return np.stack(res,axis=2)
                 else :
                     frame = cv2.resize(state,(self.resized_width,self.resized_height))
-                    frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY) / 255
+                    frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
                     frame = frame.reshape([self.resized_width, self.resized_height])
                     return np.stack([frame for _ in range(self.stack_size)],axis=2)
             else :
                 if(next_state is not None) :
                     state = next_state
                 frame = cv2.resize(state,(self.resized_width,self.resized_height))
-                frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY) / 255
+                frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
                 return frame.reshape([self.resized_width, self.resized_height, 1])
         if(next_state is None) :
             return state

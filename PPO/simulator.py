@@ -1,6 +1,7 @@
 from mario_environment import MarioEnvironment
-from config import Config
+from gym_environment import GymEnvironment
 from keras.models import model_from_json
+from noisy_gaussian import NoisyDense
 import numpy as np
 import sys
 import keras.backend as K
@@ -8,15 +9,16 @@ import tensorflow as tf
 import time
 
 def simulate() :
-    env = Config.env.clone()
+    env = GymEnvironment('LunarLander-v2',13,13,use_pixels=False,stack_size=4,is_discrete=True,save_video=False,save_video_interval=10)
+    #env = MarioEnvironment('SuperMarioBros-v0',48,48,use_pixels=True,stack_size=4,is_discrete=True,save_video=False,save_video_interval=5)
     dummy_advantage = np.zeros((1, 1))
     dummy_old_actions_probs = np.zeros((1, env.getOutputSize()))
     episode = sys.argv[1]
-    dir = Config.root_dir + '/models/episode-' +str(episode) + '/'
+    dir = '.' + '/models/episode-' +str(episode) + '/'
     with open(dir + 'actor.json','rb') as fp :
         json_model = fp.read()
 
-    model = model_from_json(json_model)
+    model = model_from_json(json_model,custom_objects={'NoisyDense': NoisyDense})
     model.load_weights(dir + 'actor_weights')
     model.summary()
     state = env.reset()
