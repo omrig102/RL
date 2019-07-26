@@ -2,7 +2,6 @@
 from config import Config
 from termcolor import colored
 import numpy as np
-from noisy_gaussian import NoisyDense
 import os
 import tensorflow as tf
 from critic import Critic
@@ -21,8 +20,8 @@ class PPO() :
         self.sess = sess
         self.env = Config.env.clone()
         self.critic = Critic(sess,self.env.getInputSize(),self.env.getOutputSize(),self.env.use_pixels)
-        self.actor = Actor(sess,self.env.getInputSize(),self.env.getOutputSize(),self.env.use_pixels,'new')
-        self.old_actor = Actor(sess,self.env.getInputSize(),self.env.getOutputSize(),self.env.use_pixels,'old')
+        self.actor = Actor(sess,self.env.getInputSize(),self.env.getOutputSize(),self.env.use_pixels,self.env.is_discrete,'new')
+        self.old_actor = Actor(sess,self.env.getInputSize(),self.env.getOutputSize(),self.env.use_pixels,self.env.is_discrete,'old')
         init = tf.global_variables_initializer()
         sess.run(init)
         
@@ -48,11 +47,11 @@ class PPO() :
         rewards = rewards.reshape([rewards.shape[0],1])
         advantages = rewards - estimated_rewards
         
-        if(self.env.is_discrete) :
-            for _ in range(Config.epochs) :
-                for index in range(int(Config.buffer_size/Config.batch_size)) :
-                    batch_states,batch_advantages,batch_old_probs,batch_masks = self.actor.prepareBatch(states,advantages,actions_probs,mask,index,False)
-                    self.actor.train(batch_states,batch_advantages,batch_old_probs,batch_masks)
+        
+        for _ in range(Config.epochs) :
+            for index in range(int(Config.buffer_size/Config.batch_size)) :
+                batch_states,batch_advantages,batch_old_probs,batch_masks = self.actor.prepareBatch(states,advantages,actions_probs,mask,index,False)
+                self.actor.train(batch_states,batch_advantages,batch_old_probs,batch_masks)
 
         self.old_actor.copyTrainables(self.actor.scope)
         for _ in range(Config.epochs) :
@@ -95,6 +94,12 @@ class PPO() :
                 
                 mask.append(current_action)
                 batch_actions_probs.append(actions_probs)
+            else :
+                action,action_probs = self.old_actor.predict(np.expand_dims(state,axis=0))
+                action = action.reshape([action.shape[1]])
+                action_probs = action_probs.reshape([action_probs.shape[1]])
+                mask.append(action)
+                batch_actions_probs.append(action_probs)
 
             
             next_state,reward,done,_ = self.env.step(action)
@@ -142,7 +147,8 @@ class PPO() :
                 break
     
             
-
-with tf.Session() as sess:   
+config = tf.ConfigProto()
+config.gpu_options.allow_growth=True
+with tf.Session(config=config) as sess:   
     ppo = PPO(sess)
     ppo.run()
