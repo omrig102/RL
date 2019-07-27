@@ -126,18 +126,12 @@ class Actor() :
         self.sess.run(update_ops)
 
 
-    def prepareBatch(self,states,advantages,old_probs,masks,current_batch,shuffle=True) :
+    def prepareBatch(self,states,advantages,old_probs,masks,current_batch) :
         current_index = int(current_batch * Config.batch_size)
         batch_states = states[current_index : current_index + Config.batch_size]
         batch_advantages = advantages[current_index : current_index + Config.batch_size]
         batch_old_probs = old_probs[current_index : current_index + Config.batch_size]
         batch_masks = masks[current_index : current_index + Config.batch_size]
-
-        if(shuffle) :
-            np.random.shuffle(batch_states)
-            np.random.shuffle(batch_advantages)
-            np.random.shuffle(batch_old_probs)
-            np.random.shuffle(batch_masks)
 
         return batch_states,batch_advantages,batch_old_probs,batch_masks
 
