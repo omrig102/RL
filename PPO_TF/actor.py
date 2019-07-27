@@ -46,11 +46,11 @@ class Actor() :
         self.actor_action_p = tf.placeholder(shape=[None,self.output_size],dtype=tf.float32)
         current_layer = self.state
         if(self.use_pixels and Config.use_conv_layers) :
-            current_layer = tf.layers.conv2d(current_layer,filters=48,kernel_size=3,strides=1,activation=tf.nn.relu,padding='SAME')
-            current_layer = tf.layers.conv2d(current_layer,filters=48,kernel_size=3,strides=1,activation=tf.nn.relu,padding='SAME')
+            current_layer = tf.layers.conv2d(current_layer,filters=48,kernel_size=3,strides=1,activation=tf.nn.relu)
+            current_layer = tf.layers.conv2d(current_layer,filters=48,kernel_size=3,strides=1,activation=tf.nn.relu)
             current_layer = tf.layers.flatten(current_layer)
         elif(self.use_pixels) :
-            current_layer = tf.layers.reshape(current_layer,shape=[None,self.input_size[0] * self.input_size[1]])
+            current_layer = tf.reshape(current_layer,shape=[-1,self.input_size[1] * self.input_size[2] * self.input_size[3]])
 
         mu = tf.layers.dense(current_layer,units=self.output_size,activation=tf.nn.tanh) 
         sigma = tf.layers.dense(current_layer,units=1,activation=tf.nn.softplus)
@@ -75,27 +75,22 @@ class Actor() :
         self.state = tf.placeholder(shape=self.input_size,dtype=tf.float32)
         current_layer = self.state
         if(self.use_pixels and Config.use_conv_layers) :
-            current_layer = tf.layers.conv2d(current_layer,filters=48,kernel_size=[3,3],strides=[1,1],activation=tf.nn.tanh,kernel_initializer=tf.glorot_uniform_initializer)
-            current_layer = tf.layers.max_pooling2d(current_layer,pool_size=2,strides=2)
-            current_layer = tf.layers.conv2d(current_layer,filters=48,kernel_size=[3,3],strides=[1,1],activation=tf.nn.tanh,kernel_initializer=tf.glorot_uniform_initializer)
-            current_layer = tf.layers.max_pooling2d(current_layer,pool_size=2,strides=2)
+            current_layer = tf.layers.conv2d(current_layer,filters=48,kernel_size=3,strides=1,activation=tf.nn.relu,padding='SAME')
+            current_layer = tf.layers.conv2d(current_layer,filters=48,kernel_size=3,strides=1,activation=tf.nn.relu,padding='SAME')
             current_layer = tf.layers.flatten(current_layer)
         elif(self.use_pixels) :
-            current_layer = tf.reshape(current_layer,shape=[-1, self.input_size[1] * self.input_size[2] * self.input_size[3]])
+            current_layer = tf.layers.reshape(current_layer,shape=[None,self.input_size[0] * self.input_size[1]])
         for _ in range(Config.hidden_size) :
-            current_layer = tf.layers.dense(current_layer,units=Config.hidden_units,activation=tf.nn.tanh,kernel_initializer=tf.glorot_uniform_initializer)
-        
-        
-        noise = tf.random_normal(shape=tf.shape(current_layer), mean=0.0, stddev=0.1, dtype=tf.float32) 
-        current_layer += noise
-        self.actor_outputs = tf.layers.dense(current_layer,units=self.output_size,activation=tf.nn.softmax,kernel_initializer=tf.glorot_uniform_initializer)
+            current_layer = tf.layers.dense(current_layer,units=Config.hidden_units,activation=tf.nn.relu)
 
-        prob = self.mask * self.actor_outputs
-        old_prob = self.mask * self.old_probs
-        ratio = prob / (old_prob + 1e-10)
+        self.actor_outputs = tf.layers.dense(current_layer,units=self.output_size,activation=tf.nn.softmax)
+
+        prob = tf.log(self.mask * self.actor_outputs + 1e-10)
+        old_prob = tf.log(self.mask * self.old_probs + 1e-10)
+        ratio = tf.exp(prob - old_prob)
         unclipped = ratio * self.advantage
         clipped = tf.clip_by_value(ratio,1-Config.epsilon,1+Config.epsilon) * self.advantage
-        loss = -tf.reduce_mean(tf.minimum(unclipped,clipped) + Config.entropy * -(self.mask * self.actor_outputs * tf.log(prob + 1e-10)))
+        loss = -tf.reduce_mean(tf.minimum(unclipped,clipped) + Config.entropy * -(self.mask * self.actor_outputs * prob))
         #loss = ppoLoss(advantage=self.advantage,old_actions_probs=self.old_probs)
         optimizer = tf.train.AdamOptimizer(learning_rate=Config.actor_learning_rate)
         self.actor_optimizer = optimizer.minimize(loss)

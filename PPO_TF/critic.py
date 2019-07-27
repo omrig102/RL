@@ -16,13 +16,11 @@ class Critic() :
         self.critic_value = tf.placeholder(shape=[None,1],dtype=tf.float32)
         current_layer = self.critic_input
         if(self.use_pixels and Config.use_conv_layers) :
-            current_layer = tf.layers.conv2d(current_layer,filters=48,kernel_size=3,strides=1,activation=tf.nn.tanh,kernel_initializer=tf.glorot_uniform_initializer)
-            current_layer = tf.layers.max_pooling2d(current_layer,pool_size=2,strides=2)
-            current_layer = tf.layers.conv2d(current_layer,filters=48,kernel_size=3,strides=1,activation=tf.nn.tanh,kernel_initializer=tf.glorot_uniform_initializer)
-            current_layer = tf.layers.max_pooling2d(current_layer,pool_size=2,strides=2)
+            current_layer = tf.layers.conv2d(current_layer,filters=48,kernel_size=3,strides=1,activation=tf.nn.relu)
+            current_layer = tf.layers.conv2d(current_layer,filters=48,kernel_size=3,strides=1,activation=tf.nn.relu)
             current_layer = tf.layers.flatten(current_layer)
         elif(self.use_pixels) :
-            current_layer = tf.reshape(current_layer,shape=[-1, self.input_size[1] * self.input_size[2] * self.input_size[3]])
+            current_layer = tf.reshape(current_layer,shape=[-1,self.input_size[1] * self.input_size[2] * self.input_size[3]])
         for _ in range(Config.hidden_size) :
             current_layer = tf.layers.dense(current_layer,units=Config.hidden_units,activation=tf.nn.relu)
 
