@@ -46,17 +46,22 @@ class PPO() :
         estimated_rewards = self.critic.predict(states)
         rewards = rewards.reshape([rewards.shape[0],1])
         advantages = rewards - estimated_rewards
-        
-        
+
         for _ in range(Config.epochs) :
             for index in range(int(Config.buffer_size/Config.batch_size)) :
-                batch_states,batch_advantages,batch_old_probs,batch_masks = self.actor.prepareBatch(states,advantages,actions_probs,mask,index,False)
+                randomize = np.arange(len(states))
+                np.random.shuffle(randomize)
+                batch_states,batch_advantages,batch_old_probs,batch_masks = self.actor.prepareBatch(states[randomize],advantages[randomize],actions_probs[randomize],mask[randomize],index)
+            #    self.actor.train(batch_states,batch_advantages,batch_old_probs,batch_masks)
                 self.actor.train(batch_states,batch_advantages,batch_old_probs,batch_masks)
 
         self.old_actor.copyTrainables(self.actor.scope)
         for _ in range(Config.epochs) :
             for index in range(int(Config.buffer_size/Config.batch_size)) :
-                batch_states,batch_values = self.critic.prepareBatch(states,rewards,index,False)
+                randomize = np.arange(len(states))
+                np.random.shuffle(randomize)
+                batch_states,batch_values = self.critic.prepareBatch(states[randomize],rewards[randomize],index)
+            #    self.critic.train(batch_states,batch_values)
                 self.critic.train(batch_states,batch_values)
 
     def getDiscountedRewards(self,rewards,done):
