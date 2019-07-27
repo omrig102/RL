@@ -83,8 +83,9 @@ class Actor() :
         elif(self.use_pixels) :
             current_layer = tf.layers.reshape(current_layer,shape=[None,self.input_size[0] * self.input_size[1]])
         for _ in range(Config.hidden_size) :
-            current_layer = tf.layers.dense(current_layer,units=Config.hidden_units,activation=tf.nn.relu,kernel_initializer=tf.glorot_uniform_initializer)
-
+            current_layer = tf.layers.dense(current_layer,units=Config.hidden_units,activation=tf.nn.tanh,kernel_initializer=tf.glorot_uniform_initializer)
+        
+        
         noise = tf.random_normal(shape=tf.shape(current_layer), mean=0.0, stddev=0.1, dtype=tf.float32) 
         current_layer += noise
         self.actor_outputs = tf.layers.dense(current_layer,units=self.output_size,activation=tf.nn.softmax,kernel_initializer=tf.glorot_uniform_initializer)
