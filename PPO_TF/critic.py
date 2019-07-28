@@ -36,13 +36,12 @@ class Critic() :
     def train(self,state,value) :
         self.sess.run(self.critic_optimizer,feed_dict={self.critic_input:state,self.critic_value:value})
 
-    def prepareBatch(self,states,values,current_batch,shuffle=True) :
+    def prepareBatch(self,states,values,current_batch,randomized) :
+        random_states = states[randomized].copy()
+        random_values = values[randomized].copy()
+        
         current_index = int(current_batch * Config.batch_size)
-        batch_states = states[current_index : current_index + Config.batch_size]
-        batch_values = values[current_index : current_index + Config.batch_size]
-
-        if(shuffle) :
-            np.random.shuffle(batch_states)
-            np.random.shuffle(batch_values)
+        batch_states = random_states[current_index : current_index + Config.batch_size]
+        batch_values = random_values[current_index : current_index + Config.batch_size]
 
         return batch_states,batch_values
