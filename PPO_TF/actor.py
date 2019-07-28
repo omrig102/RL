@@ -47,12 +47,12 @@ class Actor() :
             current_layer = tf.layers.dense(current_layer,units=Config.hidden_units,activation=tf.nn.tanh)
         
         #current_layer = tf.layers.batch_normalization(current_layer, training=True)
-        mu = tf.layers.dense(current_layer,units=self.output_size,activation=None) 
+        mu_1 = tf.layers.dense(current_layer,units=self.output_size,activation=tf.nn.tanh,kernel_regularizer=tf.contrib.layers.l2_regularizer(0.001)) 
         
-        log_sigma = tf.Variable(-0.5*np.ones(self.output_size, dtype=np.float32))
+        mu = mu_1 * (Config.env.env.action_space.high - Config.env.env.action_space.low ) / 2
+        
+        log_sigma = tf.Variable(np.zeros(self.output_size, dtype=np.float32))
         sigma = tf.exp(log_sigma)
-        #sigma = tf.layers.dense(current_layer,units=self.output_size,activation=tf.nn.softplus,kernel_initializer=tf.zeros_initializer()) 
-        #sigma = tf.exp(log_sigma)
 
         
         dist = tf.contrib.distributions.Normal(mu,sigma)
@@ -65,7 +65,6 @@ class Actor() :
         loss = -tf.reduce_mean(tf.minimum(unclipped,clipped) + Config.entropy * -(self.actor_probs * tf.log(self.actor_probs + 1e-10)))
         optimizer = tf.train.AdamOptimizer(learning_rate=Config.actor_learning_rate)
         self.actor_optimizer = optimizer.minimize(loss)
-
 
     def buildActorNetworkDiscrete(self) :
         self.mask = tf.placeholder(shape=[None,self.output_size],dtype=tf.float32)
