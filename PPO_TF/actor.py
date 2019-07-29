@@ -19,15 +19,6 @@ class Actor() :
             self.buildActorNetworkDiscrete()
         else :
             self.buildActorNetworkContinuous()
-    
-    def get_gaussian_log(self,x, mu, log_stddev):
-        '''
-        returns log probability of picking x
-        from a gaussian distribution N(mu, stddev)
-        '''
-        # ignore constant since it will be cancelled while taking ratios
-        log_prob = -log_stddev - (x - mu)**2 / (2 * tf.exp(log_stddev)**2)
-        return log_prob
 
     def buildActorNetworkContinuous(self) :
         self.mask = tf.placeholder(shape=[None,self.output_size],dtype=tf.float32)
@@ -37,17 +28,16 @@ class Actor() :
         self.actor_action_p = tf.placeholder(shape=[None,self.output_size],dtype=tf.float32)
         current_layer = self.state
         if(self.use_pixels and Config.use_conv_layers) :
-            current_layer = tf.layers.conv2d(current_layer,filters=48,kernel_size=3,strides=1,activation=tf.nn.relu)
-            current_layer = tf.layers.conv2d(current_layer,filters=48,kernel_size=3,strides=1,activation=tf.nn.relu)
+            current_layer = tf.layers.conv2d(current_layer,filters=48,kernel_size=3,strides=1,activation=tf.nn.relu,kernel_regularizer=tf.contrib.layers.l2_regularizer(Config.l2))
+            current_layer = tf.layers.conv2d(current_layer,filters=48,kernel_size=3,strides=1,activation=tf.nn.relu,kernel_regularizer=tf.contrib.layers.l2_regularizer(Config.l2))
             current_layer = tf.layers.flatten(current_layer)
         elif(self.use_pixels) :
             current_layer = tf.reshape(current_layer,shape=[-1,self.input_size[1] * self.input_size[2] * self.input_size[3]])
 
         for _ in range(Config.hidden_size) :
-            current_layer = tf.layers.dense(current_layer,units=Config.hidden_units,activation=tf.nn.tanh)
+            current_layer = tf.layers.dense(current_layer,units=Config.hidden_units,activation=tf.nn.tanh,kernel_regularizer=tf.contrib.layers.l2_regularizer(Config.l2))
         
-        #current_layer = tf.layers.batch_normalization(current_layer, training=True)
-        mu_1 = tf.layers.dense(current_layer,units=self.output_size,activation=tf.nn.tanh,kernel_regularizer=tf.contrib.layers.l2_regularizer(0.001)) 
+        mu_1 = tf.layers.dense(current_layer,units=self.output_size,activation=tf.nn.tanh,kernel_regularizer=tf.contrib.layers.l2_regularizer(Config.l2)) 
         
         high = Config.env.env.action_space.high
         low = Config.env.env.action_space.low

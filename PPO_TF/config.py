@@ -15,7 +15,7 @@ class Config() :
     epsilon=0.2
     entropy = 0.1
     gamma = 0.99
-    lam = 0.97
+    l2 = 0.01
     save_rate = 10
     noise_interval = 128
     hidden_size = 3
