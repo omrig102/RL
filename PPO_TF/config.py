@@ -10,7 +10,7 @@ class Config() :
     theta = 0.15
     dt = 1e-2
     batch_size = 64
-    buffer_size = 256
+    buffer_size = 8192
     epochs = 10
     epsilon=0.2
     entropy = 0.1
@@ -24,4 +24,4 @@ class Config() :
     actor_learning_rate = 0.0001
     use_conv_layers = False
     #env = MarioEnvironment('SuperMarioBros-v0',48,48,use_pixels=True,stack_size=4,is_discrete=True,save_video_interval=5)
-    env = GymEnvironment('Pendulum-v0',48,48,use_pixels=False,stack_size=4,is_discrete=False,save_video=True,save_video_interval=10)
+    env = GymEnvironment('LunarLanderContinuous-v2',48,48,use_pixels=False,stack_size=4,is_discrete=False,save_video=True,save_video_interval=10)

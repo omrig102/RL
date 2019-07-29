@@ -19,6 +19,15 @@ class Actor() :
             self.buildActorNetworkDiscrete()
         else :
             self.buildActorNetworkContinuous()
+    
+    def get_gaussian_log(self,x, mu, log_stddev):
+        '''
+        returns log probability of picking x
+        from a gaussian distribution N(mu, stddev)
+        '''
+        # ignore constant since it will be cancelled while taking ratios
+        log_prob = -log_stddev - (x - mu)**2 / (2 * tf.exp(log_stddev)**2)
+        return log_prob
 
     def buildActorNetworkContinuous(self) :
         self.mask = tf.placeholder(shape=[None,self.output_size],dtype=tf.float32)
@@ -37,6 +46,7 @@ class Actor() :
         for _ in range(Config.hidden_size) :
             current_layer = tf.layers.dense(current_layer,units=Config.hidden_units,activation=tf.nn.tanh)
         
+        #current_layer = tf.layers.batch_normalization(current_layer, training=True)
         mu_1 = tf.layers.dense(current_layer,units=self.output_size,activation=tf.nn.tanh,kernel_regularizer=tf.contrib.layers.l2_regularizer(0.001)) 
         
         high = Config.env.env.action_space.high
@@ -57,6 +67,7 @@ class Actor() :
         loss = -tf.reduce_mean(tf.minimum(unclipped,clipped) + Config.entropy * -(self.actor_probs * tf.log(self.actor_probs + 1e-10)))
         optimizer = tf.train.AdamOptimizer(learning_rate=Config.actor_learning_rate)
         self.actor_optimizer = optimizer.minimize(loss)
+
 
     def buildActorNetworkDiscrete(self) :
         self.mask = tf.placeholder(shape=[None,self.output_size],dtype=tf.float32)
@@ -82,7 +93,6 @@ class Actor() :
         unclipped = ratio * self.advantage
         clipped = tf.clip_by_value(ratio,1-Config.epsilon,1+Config.epsilon) * self.advantage
         loss = -tf.reduce_mean(tf.minimum(unclipped,clipped) + Config.entropy * -(self.mask * self.actor_outputs * prob))
-        #loss = ppoLoss(advantage=self.advantage,old_actions_probs=self.old_probs)
         optimizer = tf.train.AdamOptimizer(learning_rate=Config.actor_learning_rate)
         self.actor_optimizer = optimizer.minimize(loss)
 
@@ -130,4 +140,3 @@ class Actor() :
         batch_masks = random_masks[current_index : current_index + Config.batch_size]
 
         return batch_states,batch_advantages,batch_old_probs,batch_masks
-
