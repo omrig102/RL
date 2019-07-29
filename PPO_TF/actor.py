@@ -19,15 +19,6 @@ class Actor() :
             self.buildActorNetworkDiscrete()
         else :
             self.buildActorNetworkContinuous()
-    
-    def get_gaussian_log(self,x, mu, log_stddev):
-        '''
-        returns log probability of picking x
-        from a gaussian distribution N(mu, stddev)
-        '''
-        # ignore constant since it will be cancelled while taking ratios
-        log_prob = -log_stddev - (x - mu)**2 / (2 * tf.exp(log_stddev)**2)
-        return log_prob
 
     def buildActorNetworkContinuous(self) :
         self.mask = tf.placeholder(shape=[None,self.output_size],dtype=tf.float32)
@@ -46,17 +37,18 @@ class Actor() :
         for _ in range(Config.hidden_size) :
             current_layer = tf.layers.dense(current_layer,units=Config.hidden_units,activation=tf.nn.tanh)
         
-        #current_layer = tf.layers.batch_normalization(current_layer, training=True)
         mu_1 = tf.layers.dense(current_layer,units=self.output_size,activation=tf.nn.tanh,kernel_regularizer=tf.contrib.layers.l2_regularizer(0.001)) 
         
-        mu = mu_1 * (Config.env.env.action_space.high - Config.env.env.action_space.low ) / 2
+        high = Config.env.env.action_space.high
+        low = Config.env.env.action_space.low
+        mu = (mu_1 * (high - low) + high + low) / 2
         
         log_sigma = tf.Variable(np.zeros(self.output_size, dtype=np.float32))
         sigma = tf.exp(log_sigma)
 
         
         dist = tf.contrib.distributions.Normal(mu,sigma)
-        self.actor_action = tf.clip_by_value(dist.sample(1),Config.env.env.action_space.low,Config.env.env.action_space.high)
+        self.actor_action = tf.clip_by_value(dist.sample(1),low,high)
         self.actor_probs = dist.prob(self.actor_action_p)
 
         ratio = self.actor_probs / (self.old_probs + 1e-10)
