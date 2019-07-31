@@ -51,16 +51,3 @@ class Critic() :
         batch_values = random_values[current_index : current_index + Config.batch_size]
 
         return batch_states,batch_values
-
-
-    def updateTrainables(self,critic_scope) :
-        e1_params = [t for t in tf.trainable_variables(critic_scope)]
-        e1_params = sorted(e1_params, key=lambda v: v.name)
-        e2_params = [t for t in tf.trainable_variables(self.scope)]
-        e2_params = sorted(e2_params, key=lambda v: v.name)
-        update_ops = []
-        for e1_v, e2_v in zip(e1_params, e2_params):
-            op = e2_v.assign(e1_v * Config.TAU  + e2_v * (1-Config.TAU))
-            update_ops.append(op)
-
-        self.sess.run(update_ops)

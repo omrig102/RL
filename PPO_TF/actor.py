@@ -124,7 +124,6 @@ class Actor() :
 
         self.sess.run(update_ops)
 
-
     def prepareBatch(self,states,advantages,old_probs,masks,current_batch,randomize) :
         random_states = states[randomize].copy()
         random_advantages = advantages[randomize].copy()

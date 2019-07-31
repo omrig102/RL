@@ -62,8 +62,8 @@ class PPO() :
             for index in range(int(Config.buffer_size/Config.batch_size)) :
                 randomize = np.arange(len(states))
                 np.random.shuffle(randomize)
-                #batch_states,batch_advantages,batch_old_probs,batch_masks = self.sess.run(actor_dataset)
                 batch_states,batch_advantages,batch_old_probs,batch_masks = self.actor.prepareBatch(states,advantages,actions_probs,mask,index,randomize)
+
                 self.actor.train(batch_states,batch_advantages,batch_old_probs,batch_masks)
 
         self.old_actor.copyTrainables(self.actor.scope)
@@ -71,7 +71,6 @@ class PPO() :
             for index in range(int(Config.buffer_size/Config.batch_size)) :
                 randomize = np.arange(len(states))
                 np.random.shuffle(randomize)
-                #batch_states,batch_rewards = self.sess.run(critic_dataset)
                 batch_states,batch_rewards = self.critic.prepareBatch(states,rewards,index,randomize)
                 self.critic.train(batch_states,batch_rewards)
 
