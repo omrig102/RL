@@ -19,9 +19,9 @@ class PPO() :
 
         self.sess = sess
         self.env = Config.env.clone()
-        self.critic = Critic(sess,self.env.getInputSize(),self.env.getOutputSize(),self.env.use_pixels)
-        self.actor = Actor(sess,self.env.getInputSize(),self.env.getOutputSize(),self.env.use_pixels,self.env.is_discrete,'new')
-        self.old_actor = Actor(sess,self.env.getInputSize(),self.env.getOutputSize(),self.env.use_pixels,self.env.is_discrete,'old')
+        self.critic = Critic(sess,self.env.getInputSize(),self.env.getOutputSize(),self.env.use_pixels,'critic')
+        self.actor = Actor(sess,self.env.getInputSize(),self.env.getOutputSize(),self.env.use_pixels,self.env.is_discrete,'new_actor')
+        self.old_actor = Actor(sess,self.env.getInputSize(),self.env.getOutputSize(),self.env.use_pixels,self.env.is_discrete,'old_actor')
         
         coord = tf.train.Coordinator()
         threads = tf.train.start_queue_runners(sess=sess, coord=coord)
@@ -74,6 +74,7 @@ class PPO() :
                 #batch_states,batch_rewards = self.sess.run(critic_dataset)
                 batch_states,batch_rewards = self.critic.prepareBatch(states,rewards,index,randomize)
                 self.critic.train(batch_states,batch_rewards)
+
 
     def getDiscountedRewards(self,rewards,done):
         for j in range(len(rewards) - 2, -1, -1):

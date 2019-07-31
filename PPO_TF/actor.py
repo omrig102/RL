@@ -28,8 +28,8 @@ class Actor() :
         self.actor_action_p = tf.placeholder(shape=[None,self.output_size],dtype=tf.float32)
         current_layer = self.state
         if(self.use_pixels and Config.use_conv_layers) :
-            current_layer = tf.layers.conv2d(current_layer,filters=48,kernel_size=3,strides=1,activation=tf.nn.relu,kernel_regularizer=tf.contrib.layers.l2_regularizer(Config.l2))
-            current_layer = tf.layers.conv2d(current_layer,filters=48,kernel_size=3,strides=1,activation=tf.nn.relu,kernel_regularizer=tf.contrib.layers.l2_regularizer(Config.l2))
+            current_layer = tf.layers.conv2d(current_layer,filters=48,kernel_size=3,strides=1,activation=tf.nn.tanh,kernel_regularizer=tf.contrib.layers.l2_regularizer(Config.l2))
+            current_layer = tf.layers.conv2d(current_layer,filters=48,kernel_size=3,strides=1,activation=tf.nn.tanh,kernel_regularizer=tf.contrib.layers.l2_regularizer(Config.l2))
             current_layer = tf.layers.flatten(current_layer)
         elif(self.use_pixels) :
             current_layer = tf.reshape(current_layer,shape=[-1,self.input_size[1] * self.input_size[2] * self.input_size[3]])
@@ -67,15 +67,23 @@ class Actor() :
         
         current_layer = self.state
         if(self.use_pixels and Config.use_conv_layers) :
-            current_layer = tf.layers.conv2d(current_layer,filters=48,kernel_size=3,strides=1,activation=tf.nn.relu)
-            current_layer = tf.layers.conv2d(current_layer,filters=48,kernel_size=3,strides=1,activation=tf.nn.relu)
+            current_layer = tf.layers.conv2d(current_layer,filters=48,kernel_size=3,strides=1,activation=tf.nn.tanh,kernel_regularizer=tf.contrib.layers.l2_regularizer(Config.l2))
+            current_layer = tf.layers.conv2d(current_layer,filters=48,kernel_size=3,strides=1,activation=tf.nn.tanh,kernel_regularizer=tf.contrib.layers.l2_regularizer(Config.l2))
             current_layer = tf.layers.flatten(current_layer)
+            current_layer = tf.layers.batch_normalization(current_layer, training=True)
         elif(self.use_pixels) :
             current_layer = tf.layers.reshape(current_layer,shape=[-1,self.input_size[1] * self.input_size[2] * self.input_size[3]])
         for _ in range(Config.hidden_size) :
-            current_layer = tf.layers.dense(current_layer,units=Config.hidden_units,activation=tf.nn.relu)
+            current_layer = tf.layers.dense(current_layer,units=Config.hidden_units,activation=tf.nn.tanh,kernel_regularizer=tf.contrib.layers.l2_regularizer(Config.l2))
 
-        self.actor_outputs = tf.layers.dense(current_layer,units=self.output_size,activation=tf.nn.softmax)
+        noise_scale = tf.Variable(0.02 * np.ones([Config.hidden_units], dtype=np.float32))
+        noise_sigma = tf.Variable(np.ones([Config.hidden_units], dtype=np.float32))
+        current_layer += noise_scale * tf.random_normal(shape=tf.shape(current_layer), mean=0.0, stddev=noise_sigma, dtype=tf.float32) 
+        self.actor_outputs = tf.layers.dense(current_layer,units=self.output_size,activation=tf.nn.softmax,kernel_regularizer=tf.contrib.layers.l2_regularizer(Config.l2))
+
+        
+        
+
 
         prob = tf.log(self.mask * self.actor_outputs + 1e-10)
         old_prob = tf.log(self.mask * self.old_probs + 1e-10)
