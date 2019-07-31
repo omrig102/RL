@@ -19,9 +19,12 @@ class PPO() :
 
         self.sess = sess
         self.env = Config.env.clone()
-        self.critic = Critic(sess,self.env.getInputSize(),self.env.getOutputSize(),self.env.use_pixels)
-        self.actor = Actor(sess,self.env.getInputSize(),self.env.getOutputSize(),self.env.use_pixels,self.env.is_discrete,'new')
-        self.old_actor = Actor(sess,self.env.getInputSize(),self.env.getOutputSize(),self.env.use_pixels,self.env.is_discrete,'old')
+        self.critic = Critic(sess,self.env.getInputSize(),self.env.getOutputSize(),self.env.use_pixels,'critic')
+        self.actor = Actor(sess,self.env.getInputSize(),self.env.getOutputSize(),self.env.use_pixels,self.env.is_discrete,'new_actor')
+        self.old_actor = Actor(sess,self.env.getInputSize(),self.env.getOutputSize(),self.env.use_pixels,self.env.is_discrete,'old_actor')
+        
+        coord = tf.train.Coordinator()
+        threads = tf.train.start_queue_runners(sess=sess, coord=coord)
         init = tf.global_variables_initializer()
         sess.run(init)
         
@@ -47,12 +50,20 @@ class PPO() :
         rewards = rewards.reshape([rewards.shape[0],1])
         advantages = rewards - estimated_rewards
 
+        '''actor_dataset = tf.data.Dataset.from_tensor_slices((states,advantages,actions_probs,mask))
+        actor_dataset = actor_dataset.shuffle(len(states)).repeat().batch(Config.batch_size).map(lambda x,y,z,w: (x,y,z,w), num_parallel_calls=4).prefetch(buffer_size=int(len(states)/2))
+        actor_dataset = actor_dataset.make_one_shot_iterator().get_next()
+        critic_dataset = tf.data.Dataset.from_tensor_slices((states,rewards))
+        critic_dataset = critic_dataset.shuffle(len(states)).repeat().batch(Config.batch_size).map(lambda x,y: (x,y), num_parallel_calls=4).prefetch(buffer_size=int(len(states)/2))
+        critic_dataset = critic_dataset.make_one_shot_iterator().get_next()'''
+
         for _ in range(Config.epochs) :
+            
             for index in range(int(Config.buffer_size/Config.batch_size)) :
                 randomize = np.arange(len(states))
                 np.random.shuffle(randomize)
-                batch_states,batch_advantages,batch_old_probs,batch_masks = self.actor.prepareBatch(states[randomize],advantages[randomize],actions_probs[randomize],mask[randomize],index)
-            #    self.actor.train(batch_states,batch_advantages,batch_old_probs,batch_masks)
+                batch_states,batch_advantages,batch_old_probs,batch_masks = self.actor.prepareBatch(states,advantages,actions_probs,mask,index,randomize)
+
                 self.actor.train(batch_states,batch_advantages,batch_old_probs,batch_masks)
 
         self.old_actor.copyTrainables(self.actor.scope)
@@ -60,9 +71,9 @@ class PPO() :
             for index in range(int(Config.buffer_size/Config.batch_size)) :
                 randomize = np.arange(len(states))
                 np.random.shuffle(randomize)
-                batch_states,batch_values = self.critic.prepareBatch(states[randomize],rewards[randomize],index)
-            #    self.critic.train(batch_states,batch_values)
-                self.critic.train(batch_states,batch_values)
+                batch_states,batch_rewards = self.critic.prepareBatch(states,rewards,index,randomize)
+                self.critic.train(batch_states,batch_rewards)
+
 
     def getDiscountedRewards(self,rewards,done):
         for j in range(len(rewards) - 2, -1, -1):
