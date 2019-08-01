@@ -57,22 +57,11 @@ class PPO() :
         critic_dataset = critic_dataset.shuffle(len(states)).repeat().batch(Config.batch_size).map(lambda x,y: (x,y), num_parallel_calls=4).prefetch(buffer_size=int(len(states)/2))
         critic_dataset = critic_dataset.make_one_shot_iterator().get_next()'''
 
-        for _ in range(Config.epochs) :
-            
-            for index in range(int(Config.buffer_size/Config.batch_size)) :
-                randomize = np.arange(len(states))
-                np.random.shuffle(randomize)
-                batch_states,batch_advantages,batch_old_probs,batch_masks = self.actor.prepareBatch(states,advantages,actions_probs,mask,index,randomize)
-
-                self.actor.train(batch_states,batch_advantages,batch_old_probs,batch_masks)
+        self.actor.train(states,advantages,actions_probs,mask)
 
         self.old_actor.copyTrainables(self.actor.scope)
-        for _ in range(Config.epochs) :
-            for index in range(int(Config.buffer_size/Config.batch_size)) :
-                randomize = np.arange(len(states))
-                np.random.shuffle(randomize)
-                batch_states,batch_rewards = self.critic.prepareBatch(states,rewards,index,randomize)
-                self.critic.train(batch_states,batch_rewards)
+
+        self.critic.train(states,rewards)
 
 
     def getDiscountedRewards(self,rewards,done):
@@ -81,11 +70,6 @@ class PPO() :
         if(not done) :
             rewards = rewards[:-1]
         return rewards
-
-    def updateRewards(self,rewards,done) :
-        return self.getDiscountedRewards(rewards,done)
-
-
 
     def collectBatch(self,state,next_state,total_rewards,episode) :
         states = []
@@ -98,9 +82,6 @@ class PPO() :
             state = self.env.preprocess(state,next_state)
             states.append(state) 
 
-
-            
-            
             if(self.env.is_discrete) :
                 actions_probs = self.old_actor.predict(np.expand_dims(state,axis=0))
                 actions_probs = actions_probs.reshape([actions_probs.shape[1]])
@@ -122,7 +103,7 @@ class PPO() :
             rewards.append(reward)
             total_rewards += reward
             if(done) :
-                batch_rewards += self.updateRewards(rewards,True)
+                batch_rewards += self.getDiscountedRewards(rewards,True)
                 batch_states += states
                 states = []
                 rewards = []
@@ -136,7 +117,7 @@ class PPO() :
                 next_state = None
 
         if(len(states) > 0) :
-            rewards = self.updateRewards(rewards,False)
+            rewards = self.getDiscountedRewards(rewards,False)
             batch_rewards += rewards
             if(len(rewards) < len(states)) :
                 states = states[:-1]

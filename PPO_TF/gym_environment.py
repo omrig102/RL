@@ -27,6 +27,8 @@ class GymEnvironment(Environment) :
         if(self.input_size is None) :
             if(self.use_pixels) :
                 self.input_size = [None,self.resized_height, self.resized_width,self.stack_size]
+            elif(self.stack_size is not None) :
+                self.input_size = [None,self.stack_size,self.env.observation_space.shape[0]]
             else :
                 self.input_size = [None,self.env.observation_space.shape[0]]
 
@@ -72,6 +74,18 @@ class GymEnvironment(Environment) :
                 frame = cv2.resize(state,(self.resized_width,self.resized_height))
                 frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
                 return frame.reshape([self.resized_width, self.resized_height, 1])
+        elif(self.stack_size is not None) :
+            if(next_state is not None) :
+                stack = state[1:,:]
+                res = []
+                for index in range(self.stack_size) :
+                    if(index == self.stack_size - 1) :
+                        res.append(next_state)
+                    else :
+                        res.append(stack[index,:])
+                return np.stack(res,axis=0)
+            else :
+                return np.stack([state for _ in range(self.stack_size)],axis=0)
         if(next_state is None) :
             return state
         return next_state

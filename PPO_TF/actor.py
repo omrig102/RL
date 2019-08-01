@@ -1,6 +1,7 @@
 import tensorflow as tf
 from config import Config
 import numpy as np
+import math
 
 class Actor() :
 
@@ -16,12 +17,11 @@ class Actor() :
 
     def buildActorNetwork(self) :
         if(self.is_discrete) :
-            self.buildActorNetworkDiscrete()
+            self.buildActorNetworkLSTMDiscrete()
         else :
             self.buildActorNetworkContinuous()
 
     def buildActorNetworkContinuous(self) :
-        self.mask = tf.placeholder(shape=[None,self.output_size],dtype=tf.float32)
         self.advantage = tf.placeholder(shape=[None,1],dtype=tf.float32)
         self.old_probs = tf.placeholder(shape=[None,self.output_size],dtype=tf.float32)
         self.state = tf.placeholder(shape=self.input_size,dtype=tf.float32)
@@ -58,6 +58,33 @@ class Actor() :
         optimizer = tf.train.AdamOptimizer(learning_rate=Config.actor_learning_rate)
         self.actor_optimizer = optimizer.minimize(loss)
 
+    def buildActorNetworkLSTMDiscrete(self) :
+        self.mask = tf.placeholder(shape=[None,self.output_size],dtype=tf.float32)
+        self.advantage = tf.placeholder(shape=[None,1],dtype=tf.float32)
+        self.old_probs = tf.placeholder(shape=[None,self.output_size],dtype=tf.float32)
+        self.state = tf.placeholder(shape=self.input_size,dtype=tf.float32)
+        current_layer = tf.transpose(self.state,[1,0,2])
+         #lstm_cell = tf.contrib.rnn.BasicLSTMCell(Config.hidden_units,activation=tf.nn.relu)
+
+        #current_layer, final_state = tf.nn.dynamic_rnn(cell=lstm_cell,inputs=current_layer, dtype=tf.float32)
+        rnn = tf.contrib.cudnn_rnn.CudnnGRU(1, Config.hidden_units)
+        current_layer,_ = rnn(current_layer)
+        current_layer = tf.transpose(current_layer,[1,0,2])
+        current_layer = tf.reshape(current_layer,shape=[-1,self.input_size[1]*Config.hidden_units])
+        #noise_scale = tf.Variable(0.02 * np.ones([Config.hidden_units], dtype=np.float32))
+        #noise_sigma = tf.Variable(np.ones([Config.hidden_units], dtype=np.float32))
+        #current_layer += noise_scale * tf.random_normal(shape=tf.shape(current_layer), mean=0.0, stddev=noise_sigma, dtype=tf.float32) 
+        self.actor_outputs = tf.layers.dense(current_layer,units=self.output_size,activation=tf.nn.softmax,kernel_regularizer=tf.contrib.layers.l2_regularizer(Config.l2))
+
+        prob = tf.log(self.mask * self.actor_outputs + 1e-10)
+        old_prob = tf.log(self.mask * self.old_probs + 1e-10)
+        ratio = tf.exp(prob - old_prob)
+        unclipped = ratio * self.advantage
+        clipped = tf.clip_by_value(ratio,1-Config.epsilon,1+Config.epsilon) * self.advantage
+        loss = -tf.reduce_mean(tf.minimum(unclipped,clipped) + Config.entropy * -(self.mask * self.actor_outputs * prob))
+        optimizer = tf.train.AdamOptimizer(learning_rate=Config.actor_learning_rate)
+        self.actor_optimizer = optimizer.minimize(loss)
+
 
     def buildActorNetworkDiscrete(self) :
         self.mask = tf.placeholder(shape=[None,self.output_size],dtype=tf.float32)
@@ -81,10 +108,6 @@ class Actor() :
         current_layer += noise_scale * tf.random_normal(shape=tf.shape(current_layer), mean=0.0, stddev=noise_sigma, dtype=tf.float32) 
         self.actor_outputs = tf.layers.dense(current_layer,units=self.output_size,activation=tf.nn.softmax,kernel_regularizer=tf.contrib.layers.l2_regularizer(Config.l2))
 
-        
-        
-
-
         prob = tf.log(self.mask * self.actor_outputs + 1e-10)
         old_prob = tf.log(self.mask * self.old_probs + 1e-10)
         ratio = tf.exp(prob - old_prob)
@@ -104,13 +127,25 @@ class Actor() :
             action_probs = self.sess.run(self.actor_probs,feed_dict={self.state:state,self.actor_action_p:action})
             return action,action_probs
 
-    def train(self,state,advantage,old_probs,mask) :
-        if(self.is_discrete) :
-            self.sess.run(self.actor_optimizer,feed_dict={self.state:state,self.advantage:advantage
-            ,self.old_probs:old_probs,self.mask:mask})
-        else :
-            self.sess.run(self.actor_optimizer,feed_dict={self.state:state,self.advantage:advantage
-            ,self.old_probs:old_probs,self.mask:mask,self.actor_action_p:mask})
+    def train(self,states,advantages,old_probs,masks) :
+        randomize = np.arange(len(states))
+        for _ in range(Config.epochs) :
+            for index in range(int(Config.buffer_size/Config.batch_size)) :
+                if(Config.use_shuffle) :
+                    np.random.shuffle(randomize)
+                batch_states,batch_advantages,batch_old_probs,batch_masks = self.prepareBatch(states,advantages,old_probs,masks,index,randomize)
+                if(self.is_discrete) :
+                    self.__trainDiscrete(batch_states,batch_advantages,batch_old_probs,batch_masks)
+                else :
+                    self.__trainContinuous(batch_states,batch_advantages,batch_old_probs,batch_masks)
+
+    def __trainDiscrete(self,batch_states,batch_advantages,batch_old_probs,batch_masks) :
+        self.sess.run(self.actor_optimizer,feed_dict={self.state:batch_states,self.advantage:batch_advantages
+                    ,self.old_probs:batch_old_probs,self.mask:batch_masks})
+
+    def __trainContinuous(self,batch_states,batch_advantages,batch_old_probs,batch_actions) :
+        self.sess.run(self.actor_optimizer,feed_dict={self.state:batch_states,self.advantage:batch_advantages
+                    ,self.old_probs:batch_old_probs,self.actor_action_p:batch_actions})
 
     def copyTrainables(self,actor_scope) :
         e1_params = [t for t in tf.trainable_variables(actor_scope)]
@@ -123,6 +158,7 @@ class Actor() :
             update_ops.append(op)
 
         self.sess.run(update_ops)
+
 
     def prepareBatch(self,states,advantages,old_probs,masks,current_batch,randomize) :
         random_states = states[randomize].copy()

@@ -3,6 +3,7 @@ from mario_environment import MarioEnvironment
 
 class Config() :
 
+    game = 'LunarLander-v2'
     root_dir = '.'
     episodes = 10000
     start_episode = 0
@@ -23,6 +24,16 @@ class Config() :
     hidden_units = 128
     critic_learning_rate = 0.0001
     actor_learning_rate = 0.0001
-    use_conv_layers = True
+    use_conv_layers = False
+    use_lstm_layers = True
+    use_shuffle = False
+    resized_height = 13
+    resized_width = 13
+    use_pixels = False
+    stack_size = 4
+    is_discrete = True
+    save_video = True
+    save_video_interval = 10
     #env = MarioEnvironment('SuperMarioBros-v0',13,13,use_pixels=True,stack_size=4,is_discrete=True,save_video_interval=5)
-    env = GymEnvironment('Bowling-v0',13,13,use_pixels=True,stack_size=4,is_discrete=True,save_video=True,save_video_interval=10)
+    env = GymEnvironment(game,resized_height,resized_width,use_pixels=use_pixels,stack_size=stack_size
+    ,is_discrete=is_discrete,save_video=save_video,save_video_interval=save_video_interval)
