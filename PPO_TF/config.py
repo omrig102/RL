@@ -3,7 +3,7 @@ from mario_environment import MarioEnvironment
 
 class Config() :
 
-    game = 'LunarLander-v2'
+    game = 'LunarLanderContinuous-v2'
     root_dir = '.'
     episodes = 10000
     start_episode = 0
@@ -11,7 +11,7 @@ class Config() :
     theta = 0.15
     dt = 1e-2
     batch_size = 64
-    buffer_size = 128
+    buffer_size = 8192
     epochs = 10
     epsilon=0.2
     entropy = 0.1
@@ -31,7 +31,7 @@ class Config() :
     resized_width = 13
     use_pixels = False
     stack_size = 4
-    is_discrete = True
+    is_discrete = False
     save_video = True
     save_video_interval = 10
     #env = MarioEnvironment('SuperMarioBros-v0',13,13,use_pixels=True,stack_size=4,is_discrete=True,save_video_interval=5)

@@ -16,7 +16,10 @@ class Critic() :
     def buildCriticNetwork(self) :
         self.critic_input = tf.placeholder(shape=self.input_size,dtype=tf.float32)
         self.critic_value = tf.placeholder(shape=[None,1],dtype=tf.float32)
-        current_layer = tf.transpose(self.critic_input,[1,0,2])
+        if(Config.use_lstm_layers) :
+            current_layer = tf.transpose(self.critic_input,[1,0,2])
+        else :
+            current_layer = self.critic_input
         if(self.use_pixels and Config.use_conv_layers) :
             current_layer = tf.layers.conv2d(current_layer,filters=48,kernel_size=3,strides=1,activation=tf.nn.relu)
             current_layer = tf.layers.conv2d(current_layer,filters=48,kernel_size=3,strides=1,activation=tf.nn.relu)
@@ -27,9 +30,10 @@ class Critic() :
             #lstm_cell = tf.contrib.rnn.BasicLSTMCell(Config.hidden_units,activation=tf.nn.relu)
             #current_layer, final_state = tf.nn.dynamic_rnn(cell=lstm_cell,inputs=current_layer, dtype=tf.float32)
             rnn = tf.contrib.cudnn_rnn.CudnnGRU(1, Config.hidden_units)
-            current_layer,_ = rnn(current_layer)
+            current_layer,_ = rnn(current_layer,training=True)
             current_layer = tf.transpose(current_layer,[1,0,2])
-            current_layer = tf.reshape(current_layer,shape=[-1,self.input_size[1]*Config.hidden_units])
+            current_layer = current_layer[:,-1,:]
+            current_layer = tf.reshape(current_layer,shape=[-1,Config.hidden_units])
 
         for _ in range(Config.hidden_size) :
             current_layer = tf.layers.dense(current_layer,units=Config.hidden_units,activation=tf.nn.relu)

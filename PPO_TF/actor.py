@@ -17,9 +17,51 @@ class Actor() :
 
     def buildActorNetwork(self) :
         if(self.is_discrete) :
-            self.buildActorNetworkLSTMDiscrete()
+            if(Config.use_lstm_layers) :
+                self.buildActorNetworkLSTMDiscrete()
+            else :
+                self.buildActorNetworkDiscrete()
         else :
-            self.buildActorNetworkContinuous()
+            if(Config.use_lstm_layers) :
+                self.buildActorNetworkLSTMContinuous()
+            else :
+                self.buildActorNetworkContinuous()
+
+    def buildActorNetworkLSTMContinuous(self) :
+        self.advantage = tf.placeholder(shape=[None,1],dtype=tf.float32)
+        self.old_probs = tf.placeholder(shape=[None,self.output_size],dtype=tf.float32)
+        self.state = tf.placeholder(shape=self.input_size,dtype=tf.float32)
+        self.actor_action_p = tf.placeholder(shape=[None,self.output_size],dtype=tf.float32)
+        current_layer = tf.transpose(self.state,[1,0,2])
+        rnn = tf.contrib.cudnn_rnn.CudnnLSTM(1, Config.hidden_units)
+        current_layer,_ = rnn(current_layer,training=True)
+        current_layer = tf.transpose(current_layer,[1,0,2])
+        current_layer = current_layer[:,-1,:]
+        current_layer = tf.reshape(current_layer,shape=[-1,Config.hidden_units])
+
+        for _ in range(Config.hidden_size) :
+            current_layer = tf.layers.dense(current_layer,units=Config.hidden_units,activation=tf.nn.tanh,kernel_regularizer=tf.contrib.layers.l2_regularizer(Config.l2))
+        
+        mu_1 = tf.layers.dense(current_layer,units=self.output_size,activation=tf.nn.tanh,kernel_regularizer=tf.contrib.layers.l2_regularizer(Config.l2)) 
+        
+        high = Config.env.env.action_space.high
+        low = Config.env.env.action_space.low
+        mu = (mu_1 * (high - low) + high + low) / 2
+        
+        log_sigma = tf.Variable(np.zeros(self.output_size, dtype=np.float32))
+        sigma = tf.exp(log_sigma)
+
+        
+        dist = tf.contrib.distributions.Normal(mu,sigma)
+        self.actor_action = tf.clip_by_value(dist.sample(1),low,high)
+        self.actor_probs = dist.prob(self.actor_action_p)
+
+        ratio = self.actor_probs / (self.old_probs + 1e-10)
+        unclipped = ratio * self.advantage
+        clipped = tf.clip_by_value(ratio,1-Config.epsilon,1+Config.epsilon) * self.advantage
+        loss = -tf.reduce_mean(tf.minimum(unclipped,clipped) + Config.entropy * -(self.actor_probs * tf.log(self.actor_probs + 1e-10)))
+        optimizer = tf.train.AdamOptimizer(learning_rate=Config.actor_learning_rate)
+        self.actor_optimizer = optimizer.minimize(loss)
 
     def buildActorNetworkContinuous(self) :
         self.advantage = tf.placeholder(shape=[None,1],dtype=tf.float32)
@@ -64,13 +106,12 @@ class Actor() :
         self.old_probs = tf.placeholder(shape=[None,self.output_size],dtype=tf.float32)
         self.state = tf.placeholder(shape=self.input_size,dtype=tf.float32)
         current_layer = tf.transpose(self.state,[1,0,2])
-         #lstm_cell = tf.contrib.rnn.BasicLSTMCell(Config.hidden_units,activation=tf.nn.relu)
-
-        #current_layer, final_state = tf.nn.dynamic_rnn(cell=lstm_cell,inputs=current_layer, dtype=tf.float32)
-        rnn = tf.contrib.cudnn_rnn.CudnnGRU(1, Config.hidden_units)
-        current_layer,_ = rnn(current_layer)
+        
+        rnn = tf.contrib.cudnn_rnn.CudnnLSTM(1, Config.hidden_units)
+        current_layer,_ = rnn(current_layer,training=True)
         current_layer = tf.transpose(current_layer,[1,0,2])
-        current_layer = tf.reshape(current_layer,shape=[-1,self.input_size[1]*Config.hidden_units])
+        current_layer = current_layer[:,-1,:]
+        current_layer = tf.reshape(current_layer,shape=[-1,Config.hidden_units])
         #noise_scale = tf.Variable(0.02 * np.ones([Config.hidden_units], dtype=np.float32))
         #noise_sigma = tf.Variable(np.ones([Config.hidden_units], dtype=np.float32))
         #current_layer += noise_scale * tf.random_normal(shape=tf.shape(current_layer), mean=0.0, stddev=noise_sigma, dtype=tf.float32) 
