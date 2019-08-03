@@ -33,11 +33,11 @@ class Actor() :
         self.state = tf.placeholder(shape=self.input_size,dtype=tf.float32)
         self.actor_action_p = tf.placeholder(shape=[None,self.output_size],dtype=tf.float32)
         current_layer = tf.transpose(self.state,[1,0,2])
-        rnn = tf.contrib.cudnn_rnn.CudnnLSTM(1, Config.hidden_units)
-        current_layer,_ = rnn(current_layer,training=True)
+        rnn = tf.contrib.cudnn_rnn.CudnnLSTM(Config.lstm_size, Config.lstm_units)
+        current_layer,_ = rnn(current_layer)
         current_layer = tf.transpose(current_layer,[1,0,2])
         current_layer = current_layer[:,-1,:]
-        current_layer = tf.reshape(current_layer,shape=[-1,Config.hidden_units])
+        current_layer = tf.reshape(current_layer,shape=[-1,Config.lstm_units])
 
         for _ in range(Config.hidden_size) :
             current_layer = tf.layers.dense(current_layer,units=Config.hidden_units,activation=tf.nn.tanh,kernel_regularizer=tf.contrib.layers.l2_regularizer(Config.l2))
@@ -107,14 +107,18 @@ class Actor() :
         self.state = tf.placeholder(shape=self.input_size,dtype=tf.float32)
         current_layer = tf.transpose(self.state,[1,0,2])
         
-        rnn = tf.contrib.cudnn_rnn.CudnnLSTM(1, Config.hidden_units)
-        current_layer,_ = rnn(current_layer,training=True)
+        rnn = tf.contrib.cudnn_rnn.CudnnLSTM(Config.lstm_size, Config.lstm_units)
+        current_layer,_ = rnn(current_layer)
         current_layer = tf.transpose(current_layer,[1,0,2])
         current_layer = current_layer[:,-1,:]
-        current_layer = tf.reshape(current_layer,shape=[-1,Config.hidden_units])
-        #noise_scale = tf.Variable(0.02 * np.ones([Config.hidden_units], dtype=np.float32))
-        #noise_sigma = tf.Variable(np.ones([Config.hidden_units], dtype=np.float32))
-        #current_layer += noise_scale * tf.random_normal(shape=tf.shape(current_layer), mean=0.0, stddev=noise_sigma, dtype=tf.float32) 
+        current_layer = tf.reshape(current_layer,shape=[-1,Config.lstm_units])
+
+        for _ in range(Config.hidden_size) :
+            current_layer = tf.layers.dense(current_layer,units=Config.hidden_units,activation=tf.nn.tanh,kernel_regularizer=tf.contrib.layers.l2_regularizer(Config.l2))
+        
+        noise_scale = tf.Variable(0.02 * np.ones([Config.hidden_units], dtype=np.float32))
+        noise_sigma = tf.Variable(np.ones([Config.hidden_units], dtype=np.float32))
+        current_layer += noise_scale * tf.random_normal(shape=tf.shape(current_layer), mean=0.0, stddev=noise_sigma, dtype=tf.float32) 
         self.actor_outputs = tf.layers.dense(current_layer,units=self.output_size,activation=tf.nn.softmax,kernel_regularizer=tf.contrib.layers.l2_regularizer(Config.l2))
 
         prob = tf.log(self.mask * self.actor_outputs + 1e-10)

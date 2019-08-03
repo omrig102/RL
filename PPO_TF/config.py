@@ -3,7 +3,7 @@ from mario_environment import MarioEnvironment
 
 class Config() :
 
-    game = 'LunarLanderContinuous-v2'
+    game = 'BipedalWalker-v2'
     root_dir = '.'
     episodes = 10000
     start_episode = 0
@@ -20,8 +20,10 @@ class Config() :
     TAU = 1
     save_rate = 10
     noise_interval = 128
-    hidden_size = 3
-    hidden_units = 128
+    hidden_size = 1
+    hidden_units = 64
+    lstm_size = 2
+    lstm_units = 128
     critic_learning_rate = 0.0001
     actor_learning_rate = 0.0001
     use_conv_layers = False

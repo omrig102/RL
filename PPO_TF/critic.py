@@ -29,11 +29,11 @@ class Critic() :
         elif(Config.use_lstm_layers) :
             #lstm_cell = tf.contrib.rnn.BasicLSTMCell(Config.hidden_units,activation=tf.nn.relu)
             #current_layer, final_state = tf.nn.dynamic_rnn(cell=lstm_cell,inputs=current_layer, dtype=tf.float32)
-            rnn = tf.contrib.cudnn_rnn.CudnnGRU(1, Config.hidden_units)
-            current_layer,_ = rnn(current_layer,training=True)
+            rnn = tf.contrib.cudnn_rnn.CudnnLSTM(Config.lstm_size, Config.lstm_units)
+            current_layer,_ = rnn(current_layer)
             current_layer = tf.transpose(current_layer,[1,0,2])
             current_layer = current_layer[:,-1,:]
-            current_layer = tf.reshape(current_layer,shape=[-1,Config.hidden_units])
+            current_layer = tf.reshape(current_layer,shape=[-1,Config.lstm_units])
 
         for _ in range(Config.hidden_size) :
             current_layer = tf.layers.dense(current_layer,units=Config.hidden_units,activation=tf.nn.relu)
