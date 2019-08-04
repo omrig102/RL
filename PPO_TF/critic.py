@@ -24,7 +24,7 @@ class Critic() :
             current_layer = tf.layers.conv2d(current_layer,filters=48,kernel_size=3,strides=1,activation=tf.nn.relu)
             current_layer = tf.layers.conv2d(current_layer,filters=48,kernel_size=3,strides=1,activation=tf.nn.relu)
             current_layer = tf.layers.flatten(current_layer)
-        elif(self.use_pixels) :
+        elif(self.use_pixels and not Config.use_lstm_layers) :
             current_layer = tf.reshape(current_layer,shape=[-1,self.input_size[1] * self.input_size[2] * self.input_size[3]])
         elif(Config.use_lstm_layers) :
             #lstm_cell = tf.contrib.rnn.BasicLSTMCell(Config.hidden_units,activation=tf.nn.relu)

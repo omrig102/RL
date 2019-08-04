@@ -1,6 +1,6 @@
 class Environment :
 
-    def __init__(self,game=None,resized_height=0,resized_width=0,use_pixels=True,stack_size=1,is_discrete=False,save_video=True,save_video_interval=30,root_dir='.') :
+    def __init__(self,game=None,resized_height=0,resized_width=0,use_pixels=True,use_conv=False,use_lstm=False,stack_size=1,is_discrete=False,save_video=True,save_video_interval=30,root_dir='.') :
         self.game = game
         self.resized_height = resized_height
         self.resized_width = resized_width
@@ -12,6 +12,8 @@ class Environment :
         self.save_video = save_video
         self.save_video_interval = save_video_interval
         self.root_dir = root_dir
+        self.use_conv = use_conv
+        self.use_lstm = use_lstm
         self.initialize()
 
     def render(self) :

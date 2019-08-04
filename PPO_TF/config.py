@@ -3,7 +3,7 @@ from mario_environment import MarioEnvironment
 
 class Config() :
 
-    game = 'BipedalWalker-v2'
+    game = 'CarRacing-v0'
     root_dir = '.'
     episodes = 10000
     start_episode = 0
@@ -31,11 +31,12 @@ class Config() :
     use_shuffle = False
     resized_height = 13
     resized_width = 13
-    use_pixels = False
+    use_pixels = True
     stack_size = 4
     is_discrete = False
     save_video = True
     save_video_interval = 10
     #env = MarioEnvironment('SuperMarioBros-v0',13,13,use_pixels=True,stack_size=4,is_discrete=True,save_video_interval=5)
-    env = GymEnvironment(game,resized_height,resized_width,use_pixels=use_pixels,stack_size=stack_size
+    env = GymEnvironment(game,resized_height,resized_width,use_pixels=use_pixels,
+    use_conv=use_conv_layers,use_lstm=use_lstm_layers,stack_size=stack_size
     ,is_discrete=is_discrete,save_video=save_video,save_video_interval=save_video_interval)
