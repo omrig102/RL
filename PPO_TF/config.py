@@ -3,13 +3,13 @@ from mario_environment import MarioEnvironment
 
 class Config() :
 
-    game = 'SuperMarioBros-v0'
-    #game = 'CarRacing-v0'
+    #game = 'SuperMarioBros-v0'
+    game = 'BipedalWalker-v2'
     root_dir = '.'
     episodes = 10000
     start_episode = 0
     batch_size = 64
-    buffer_size = 128
+    buffer_size = 8192
     epochs = 10
     epsilon=0.2
     entropy = 0.1
@@ -18,18 +18,18 @@ class Config() :
     save_rate = 10
     critic_learning_rate = 0.0001
     actor_learning_rate = 0.0001
-    use_shuffle = False
-    use_pixels = True
+    use_shuffle = True
+    use_pixels = False
     if(use_pixels) :
         resized_height = 13
         resized_width = 13
-    network_type = 'conv2d'
+    network_type = 'mlp'
     #mlp
-    hidden_layers = 1
-    hidden_units = 64
+    hidden_layers = 3
+    hidden_units = 128
     #lstm
     if(network_type == 'lstm') :
-        lstm_layers = 2
+        lstm_layers = 1
         lstm_units = 128
         timestamps = 4
     #conv2d
@@ -45,5 +45,5 @@ class Config() :
     
     save_video = True
     save_video_interval = 10
-    env = MarioEnvironment(game,save_video=save_video,save_video_interval=save_video_interval)
-    #env = GymEnvironment(game,save_video=save_video,save_video_interval=save_video_interval)
+    #env = MarioEnvironment(game,save_video=save_video,save_video_interval=save_video_interval)
+    env = GymEnvironment(game,save_video=save_video,save_video_interval=save_video_interval)
