@@ -6,6 +6,7 @@ import os
 import tensorflow as tf
 from critic import Critic
 from actor import Actor
+import cv2
 
 #from pyvirtualdisplay import Display
 #display = Display(visible=0, size=(1400, 900))
@@ -19,29 +20,17 @@ class PPO() :
 
         self.sess = sess
         self.env = Config.env.clone()
-        self.critic = Critic(sess,self.env.getInputSize(),self.env.getOutputSize(),self.env.use_pixels,'critic')
-        self.actor = Actor(sess,self.env.getInputSize(),self.env.getOutputSize(),self.env.use_pixels,self.env.is_discrete,'new_actor')
-        self.old_actor = Actor(sess,self.env.getInputSize(),self.env.getOutputSize(),self.env.use_pixels,self.env.is_discrete,'old_actor')
+        self.critic = Critic(sess,self.env,'critic')
+        self.actor = Actor(sess,self.env,'new_actor')
+        self.old_actor = Actor(sess,self.env,'old_actor')
         
-        coord = tf.train.Coordinator()
-        threads = tf.train.start_queue_runners(sess=sess, coord=coord)
+        #coord = tf.train.Coordinator()
+        #threads = tf.train.start_queue_runners(sess=sess, coord=coord)
         init = tf.global_variables_initializer()
         sess.run(init)
         
         self.old_actor.copyTrainables(self.actor.scope)
         
-    
-    def save(self,episode) :
-        dir = Config.root_dir + '/models/episode-' + str(episode) + '/'
-        if not os.path.exists(Config.root_dir + '/models') :
-            os.mkdir(Config.root_dir + '/models')
-            os.mkdir(dir)
-        elif not os.path.exists(dir):
-            os.mkdir(dir)
-        with open(dir + "actor.json", "w") as json_file:
-            actor_model_no_noise = self.buildActorNetwork(add_noise=False)
-            json_file.write(actor_model_no_noise.to_json())
-        self.actor_model.save_weights(dir + 'actor_weights')
     
     def updateNetworks(self,batch) :
         states,rewards,mask,actions_probs = batch
@@ -49,13 +38,6 @@ class PPO() :
         estimated_rewards = self.critic.predict(states)
         rewards = rewards.reshape([rewards.shape[0],1])
         advantages = rewards - estimated_rewards
-
-        '''actor_dataset = tf.data.Dataset.from_tensor_slices((states,advantages,actions_probs,mask))
-        actor_dataset = actor_dataset.shuffle(len(states)).repeat().batch(Config.batch_size).map(lambda x,y,z,w: (x,y,z,w), num_parallel_calls=4).prefetch(buffer_size=int(len(states)/2))
-        actor_dataset = actor_dataset.make_one_shot_iterator().get_next()
-        critic_dataset = tf.data.Dataset.from_tensor_slices((states,rewards))
-        critic_dataset = critic_dataset.shuffle(len(states)).repeat().batch(Config.batch_size).map(lambda x,y: (x,y), num_parallel_calls=4).prefetch(buffer_size=int(len(states)/2))
-        critic_dataset = critic_dataset.make_one_shot_iterator().get_next()'''
 
         self.actor.train(states,advantages,actions_probs,mask)
 
@@ -79,7 +61,7 @@ class PPO() :
         batch_actions_probs = []
         mask = []
         for step in range(Config.buffer_size) :
-            state = self.env.preprocess(state,next_state)
+            state = self.preprocess(state,next_state)
             states.append(state) 
 
             if(self.env.is_discrete) :
@@ -132,6 +114,72 @@ class PPO() :
             end = False
         return batch,end,episode,total_rewards,state,next_state
 
+    def preprocess_pixels(self,state,next_state) :
+        if(next_state is not None) :
+            frame = cv2.resize(next_state,(Config.resized_width,Config.resized_height))
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            if(Config.network_type == 'mlp' or Config.network_type == 'lstm') :
+                frame = frame.reshape([Config.resized_width * Config.resized_height])
+            elif(Config.network_type == 'conv2d') :
+                frame = frame.reshape([Config.resized_width , Config.resized_height])
+            else :
+                raise Exception('Unable to preprocess state.Check config')
+            if(Config.network_type == 'mlp') :
+                return frame
+            if(Config.network_type == 'lstm') :
+                stack = state[1:,:]
+                res = []
+                for index in range(Config.timestamps) :
+                    if(index == Config.timestamps - 1) :
+                        res.append(frame)
+                    else :
+                        res.append(stack[index,:])
+                return np.stack(res,axis=0)
+            if(Config.network_type == 'conv2d') :
+                stack = state[:,:,1:]
+                res = []
+                for index in range(Config.stack_size) :
+                    if(index == Config.stack_size - 1) :
+                        res.append(frame)
+                    else :
+                        res.append(stack[:,:,index])
+                return np.stack(res,axis=2)
+        else :
+            frame = cv2.resize(state,(Config.resized_width,Config.resized_height))
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            if(Config.network_type == 'mlp' or Config.network_type == 'lstm') :
+                frame = frame.reshape([Config.resized_width * Config.resized_height])
+            elif(Config.network_type == 'conv2d') :
+                frame = frame.reshape([Config.resized_width , Config.resized_height])
+            else :
+                raise Exception('Unable to preprocess state.Check config')
+
+            if(Config.network_type == 'mlp') :
+                return frame
+            if(Config.network_type == 'lstm') :
+                return np.stack([frame for _ in range(Config.timestamps)],axis=0)
+            if(Config.network_type == 'conv2d') :
+                return np.stack([frame for _ in range(Config.stack_size)],axis=2)
+
+    def preprocess(self,state,next_state) :
+        if(Config.use_pixels) :
+            return self.preprocess_pixels(state,next_state)
+        elif(Config.network_type == 'lstm') :
+            if(next_state is not None) :
+                stack = state[1:,:]
+                res = []
+                for index in range(Config.timestamps) :
+                    if(index == Config.timestamps - 1) :
+                        res.append(next_state)
+                    else :
+                        res.append(stack[index,:])
+                return np.stack(res,axis=0)
+            else :
+                return np.stack([state for _ in range(Config.timestamps)],axis=0)
+        if(next_state is None) :
+            return state
+        return next_state
+
     def run(self) :
         state = self.env.reset()
         next_state = None
@@ -142,7 +190,7 @@ class PPO() :
             self.updateNetworks(batch)
             if(end) :
                 break
-    
+
             
 config = tf.ConfigProto()
 config.gpu_options.allow_growth=True

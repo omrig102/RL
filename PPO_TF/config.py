@@ -3,40 +3,47 @@ from mario_environment import MarioEnvironment
 
 class Config() :
 
-    game = 'CarRacing-v0'
+    game = 'SuperMarioBros-v0'
+    #game = 'CarRacing-v0'
     root_dir = '.'
     episodes = 10000
     start_episode = 0
-    sigma = 0.1
-    theta = 0.15
-    dt = 1e-2
     batch_size = 64
-    buffer_size = 8192
+    buffer_size = 128
     epochs = 10
     epsilon=0.2
     entropy = 0.1
     gamma = 0.99
     l2 = 0.001
-    TAU = 1
     save_rate = 10
-    noise_interval = 128
-    hidden_size = 1
-    hidden_units = 64
-    lstm_size = 2
-    lstm_units = 128
     critic_learning_rate = 0.0001
     actor_learning_rate = 0.0001
-    use_conv_layers = False
-    use_lstm_layers = True
     use_shuffle = False
-    resized_height = 13
-    resized_width = 13
     use_pixels = True
-    stack_size = 4
-    is_discrete = False
+    if(use_pixels) :
+        resized_height = 13
+        resized_width = 13
+    network_type = 'conv2d'
+    #mlp
+    hidden_layers = 1
+    hidden_units = 64
+    #lstm
+    if(network_type == 'lstm') :
+        lstm_layers = 2
+        lstm_units = 128
+        timestamps = 4
+    #conv2d
+    elif(network_type == 'conv2d' and use_pixels) :
+        conv_layers = 2
+        conv_units = 128
+        stack_size = 4
+        
+
+    
+    
+    
+    
     save_video = True
     save_video_interval = 10
-    #env = MarioEnvironment('SuperMarioBros-v0',13,13,use_pixels=True,stack_size=4,is_discrete=True,save_video_interval=5)
-    env = GymEnvironment(game,resized_height,resized_width,use_pixels=use_pixels,
-    use_conv=use_conv_layers,use_lstm=use_lstm_layers,stack_size=stack_size
-    ,is_discrete=is_discrete,save_video=save_video,save_video_interval=save_video_interval)
+    env = MarioEnvironment(game,save_video=save_video,save_video_interval=save_video_interval)
+    #env = GymEnvironment(game,save_video=save_video,save_video_interval=save_video_interval)
