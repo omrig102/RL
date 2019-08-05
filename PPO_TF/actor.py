@@ -47,8 +47,11 @@ class Actor() :
         log_sigma = tf.Variable(np.zeros(self.env.get_output_size(), dtype=np.float32))
         sigma = tf.exp(log_sigma)
 
-        
-        dist = tf.contrib.distributions.Normal(mu,tf.maximum(sigma,Config.sigma_limit))
+        if(Config.sigma_limit is not None) :
+            scale = tf.maximum(sigma,Config.sigma_limit)
+        else :
+            scale = sigma
+        dist = tf.contrib.distributions.Normal(mu,scale)
         self.action = tf.clip_by_value(dist.sample(1),low,high)
         self.probs = dist.prob(self.chosen_action)
 
