@@ -3,6 +3,7 @@ from config import Config
 import numpy as np
 import math
 import models
+import os
 
 class Actor() :
 
@@ -22,13 +23,26 @@ class Actor() :
         else :
             for shape in self.env.get_input_size() :
                 self.input_size.append(shape)
-        with tf.variable_scope(scope) as s:
-            self.build_actor_network()
+        
         self.sess = sess
-        self.saver = tf.train.Saver(tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope=self.scope))
+        with tf.variable_scope(scope) as s:
+                self.build_actor_network()
+            
+       
+            
 
-    def save(self,dir) :
-        self.saver.save(self.sess,dir + 'actor-' + self.scope)
+    def init(self) :
+        self.saver = tf.train.Saver(tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope=self.scope))
+        if(Config.start_episode > 0) :
+            self.load()
+
+    def load(self) :
+        dir = Config.root_dir + '/models/episode-' + str(Config.start_episode) + '/actor-' + self.scope + '/model.ckpt-' + str(Config.start_episode)
+        
+        self.saver.restore(self.sess,dir)
+
+    def save(self,dir,episode) :
+        self.saver.save(self.sess,dir + '/actor-' + self.scope + '/model.ckpt',global_step=episode)
 
     def build_actor_network(self) :
         if(self.env.is_discrete) :
@@ -37,12 +51,12 @@ class Actor() :
             self.build_actor_network_continuous()
 
     def build_actor_network_continuous(self) :
-        self.advantage = tf.placeholder(shape=[None,1],dtype=tf.float32)
-        self.old_probs = tf.placeholder(shape=[None,self.env.get_output_size()],dtype=tf.float32)
-        self.state = tf.placeholder(shape=self.input_size,dtype=tf.float32)
-        self.chosen_action = tf.placeholder(shape=[None,self.env.get_output_size()],dtype=tf.float32)
+        self.advantage = tf.placeholder(shape=[None,1],dtype=tf.float32,name='advantage')
+        self.old_probs = tf.placeholder(shape=[None,self.env.get_output_size()],dtype=tf.float32,name='old_prob')
+        self.state = tf.placeholder(shape=self.input_size,dtype=tf.float32,name='state')
+        self.chosen_action = tf.placeholder(shape=[None,self.env.get_output_size()],dtype=tf.float32,name='chosen_action')
         
-        mu_1 = self.build_base_network(self.state,self.env.get_output_size(),'tanh',Config.l2)
+        mu_1 = self.build_base_network(self.state,self.env.get_output_size(),'tanh',l2=Config.l2)
         
         high = Config.env.env.action_space.high
         low = Config.env.env.action_space.low
@@ -56,23 +70,23 @@ class Actor() :
         else :
             scale = sigma
         dist = tf.contrib.distributions.Normal(mu,scale)
-        self.action = tf.clip_by_value(dist.sample(1),low,high)
-        self.probs = dist.prob(self.chosen_action)
+        self.action = tf.clip_by_value(dist.sample(1),low,high,name='action')
+        self.probs = dist.prob(self.chosen_action,name='probs')
 
         self.loss_continuous()
 
-    def build_base_network(self,x,output_size,output_activation,l2=None) :
+    def build_base_network(self,x,output_size,output_activation,output_name=None,l2=None) :
         if(Config.use_pixels) :
             if(Config.network_type == 'mlp') :
-                return models.create_network_pixels_mlp(x,Config.mlp_hidden_layers,Config.mlp_hidden_units,'tanh',output_size,output_activation,l2)
+                return models.create_network_pixels_mlp(x,Config.mlp_hidden_layers,Config.mlp_hidden_units,'tanh',output_size,output_activation,output_name,l2)
             elif(Config.network_type == 'conv2d') :
-                return models.create_network_pixels_conv(x,Config.conv_layers,Config.conv_units,'relu',Config.mlp_hidden_layers,Config.mlp_hidden_units,'tanh',output_size,output_activation,l2)
+                return models.create_network_pixels_conv(x,Config.conv_layers,Config.conv_units,'relu',Config.mlp_hidden_layers,Config.mlp_hidden_units,'tanh',output_size,output_activation,output_name,l2)
             elif(Config.network_type == 'lstm')  :
-                return models.create_network_lstm(x,Config.lstm_layers,Config.lstm_units,Config.mlp_hidden_layers,Config.mlp_hidden_units,'tanh',output_size,output_activation,l2)
+                return models.create_network_lstm(x,Config.lstm_layers,Config.lstm_units,Config.mlp_hidden_layers,Config.mlp_hidden_units,'tanh',output_size,output_activation,output_name,l2)
         elif(Config.network_type == 'mlp') :
-            return models.create_mlp_network(x,Config.mlp_hidden_layers,Config.mlp_hidden_units,'tanh',output_size,output_activation,l2)
+            return models.create_mlp_network(x,Config.mlp_hidden_layers,Config.mlp_hidden_units,'tanh',output_size,output_activation,output_name,l2)
         elif(Config.network_type == 'lstm') :
-            return models.create_network_lstm(x,Config.lstm_layers,Config.lstm_units,Config.mlp_hidden_layers,Config.mlp_hidden_units,'tanh',output_size,output_activation,l2)
+            return models.create_network_lstm(x,Config.lstm_layers,Config.lstm_units,Config.mlp_hidden_layers,Config.mlp_hidden_units,'tanh',output_size,output_activation,output_name,l2)
         else :
             raise Exception('Unable to create base network,check config')
 
@@ -95,12 +109,13 @@ class Actor() :
         self.optimizer = optimizer.minimize(loss)
 
     def build_actor_network_discrete(self) :
-        self.mask = tf.placeholder(shape=[None,self.env.get_output_size()],dtype=tf.float32)
-        self.advantage = tf.placeholder(shape=[None,1],dtype=tf.float32)
-        self.old_probs = tf.placeholder(shape=[None,self.env.get_output_size()],dtype=tf.float32)
-        self.state = tf.placeholder(shape=self.input_size,dtype=tf.float32)
+        self.mask = tf.placeholder(shape=[None,self.env.get_output_size()],dtype=tf.float32,name='mask')
+        self.advantage = tf.placeholder(shape=[None,1],dtype=tf.float32,name='advantage')
+        self.old_probs = tf.placeholder(shape=[None,self.env.get_output_size()],dtype=tf.float32,name='old_probs')
+        self.state = tf.placeholder(shape=self.input_size,dtype=tf.float32,name='state')
         
-        self.outputs = self.build_base_network(self.state,self.env.get_output_size(),'softmax',Config.l2)
+        self.outputs = self.build_base_network(self.state,self.env.get_output_size(),'softmax','outputs',Config.l2)
+        
 
         self.loss_discrete()
 
