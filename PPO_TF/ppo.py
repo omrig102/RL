@@ -17,6 +17,8 @@ class PPO() :
     def __init__(self,sess) :
 
         self.sess = sess
+        if(Config.start_episode > 0) :
+            Config.load()
         self.env = Config.env.clone()
         self.critic = Critic(sess,self.env,'critic')
         self.actor = Actor(sess,self.env,'new_actor')
@@ -27,9 +29,14 @@ class PPO() :
         init = tf.global_variables_initializer()
         sess.run(init)
         
+        self.critic.init()
+        self.actor.init()
+        self.old_actor.init()
+
         self.old_actor.copy_trainables(self.actor.scope)
         
     
+
     def save(self,episode) :
         dir = Config.root_dir + '/models/episode-' + str(episode) + '/'
         if not os.path.exists(Config.root_dir + '/models') :
@@ -37,9 +44,9 @@ class PPO() :
             os.mkdir(dir)
         elif not os.path.exists(dir):
             os.mkdir(dir)
-        self.old_actor.save(dir)
-        self.actor.save(dir)
-        self.critic.save(dir)
+        self.old_actor.save(dir,episode)
+        self.actor.save(dir,episode)
+        self.critic.save(dir,episode)
     
     def update_networks(self,batch) :
         states,rewards,mask,actions_probs = batch
@@ -190,10 +197,11 @@ class PPO() :
         return next_state
 
     def run(self) :
+        Config.save()
         state = self.env.reset()
         next_state = None
         total_rewards = 0
-        episode = 0
+        episode = Config.start_episode
         while(True) :
             batch,end,episode,total_rewards,state,next_state = self.collect_batch(state,next_state,total_rewards,episode)
             self.update_networks(batch)
