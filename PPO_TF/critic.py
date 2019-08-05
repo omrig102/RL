@@ -25,6 +25,10 @@ class Critic() :
         self.sess = sess
         
         self.scope = scope
+        self.saver = tf.train.Saver(tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope=self.scope))
+
+    def save(self,dir) :
+        self.saver.save(self.sess,dir + 'critic')
 
     def build_critic_network(self) :
 

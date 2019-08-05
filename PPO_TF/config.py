@@ -24,7 +24,7 @@ class Config() :
     if(use_pixels) :
         resized_height = 13
         resized_width = 13
-    network_type = 'mlp'
+    network_type = 'lstm'
     #mlp
     mlp_hidden_layers = 3
     mlp_hidden_units = 128

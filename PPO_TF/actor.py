@@ -25,6 +25,10 @@ class Actor() :
         with tf.variable_scope(scope) as s:
             self.build_actor_network()
         self.sess = sess
+        self.saver = tf.train.Saver(tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope=self.scope))
+
+    def save(self,dir) :
+        self.saver.save(self.sess,dir + 'actor-' + self.scope)
 
     def build_actor_network(self) :
         if(self.env.is_discrete) :

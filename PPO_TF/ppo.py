@@ -12,8 +12,6 @@ import cv2
 #display = Display(visible=0, size=(1400, 900))
 #display.start()
 
-
-
 class PPO() :
 
     def __init__(self,sess) :
@@ -31,6 +29,17 @@ class PPO() :
         
         self.old_actor.copy_trainables(self.actor.scope)
         
+    
+    def save(self,episode) :
+        dir = Config.root_dir + '/models/episode-' + str(episode) + '/'
+        if not os.path.exists(Config.root_dir + '/models') :
+            os.mkdir(Config.root_dir + '/models')
+            os.mkdir(dir)
+        elif not os.path.exists(dir):
+            os.mkdir(dir)
+        self.old_actor.save(dir)
+        self.actor.save(dir)
+        self.critic.save(dir)
     
     def update_networks(self,batch) :
         states,rewards,mask,actions_probs = batch
@@ -92,8 +101,8 @@ class PPO() :
                 data = 'episode {}/{} \t reward  {}'.format(episode,Config.episodes,total_rewards)
                 print(colored(data,'green'))
                 total_rewards = 0
-                #if(episode % Config.save_rate == 0) :
-                #    self.save(episode)
+                if(episode % Config.save_rate == 0) :
+                    self.save(episode)
                 episode += 1
                 state = self.env.reset()
                 next_state = None
