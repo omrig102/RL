@@ -25,7 +25,13 @@ class GymEnvironment(Environment) :
             self.env = Monitor(self.env,self.root_dir + "/videos",video_callable=lambda episode_id : True if(episode_id % self.save_video_interval == 0) else False,force=True)
 
     def clone(self,simulator=False) :
-        return GymEnvironment(self.game,not simulator,self.save_video_interval,self.root_dir)
+        save_video = True
+        if(simulator) :
+            save_video = False
+        else :
+            save_video = self.save_video
+
+        return GymEnvironment(self.game,save_video,self.save_video_interval,self.root_dir)
 
     def get_input_size(self) :
         if(self.input_size is None) :
