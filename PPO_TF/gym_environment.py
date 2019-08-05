@@ -13,8 +13,8 @@ class GymEnvironment(Environment) :
         self.input_size = None
         self.output_size = None
         self.initialize()
-        self.getInputSize()
-        self.getOutputSize()
+        self.get_input_size()
+        self.get_output_size()
 
     def render(self) :
         self.env.render()
@@ -27,7 +27,7 @@ class GymEnvironment(Environment) :
     def clone(self,simulator=False) :
         return GymEnvironment(self.game,not simulator,self.save_video_interval,self.root_dir)
 
-    def getInputSize(self) :
+    def get_input_size(self) :
         if(self.input_size is None) :
             if(type(self.env.observation_space) == Box) :
                 self.input_size = self.env.observation_space.shape
@@ -35,7 +35,7 @@ class GymEnvironment(Environment) :
                 self.input_size = self.env.observation_space.n
         return self.input_size
 
-    def getOutputSize(self) :
+    def get_output_size(self) :
         if(self.output_size is None) :
             if(type(self.env.action_space) == Box) :
                 self.output_size = self.env.action_space.shape[0]
