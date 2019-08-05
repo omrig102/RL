@@ -2,6 +2,7 @@ import tensorflow as tf
 from config import Config
 import numpy as np
 import models
+import os
 
 class Critic() :
 
@@ -20,39 +21,52 @@ class Critic() :
         else :
             for shape in self.env.get_input_size() :
                 self.input_size.append(shape)
+
+        self.sess = sess
+        self.scope = scope
+        
         with tf.variable_scope(scope) as s:
             self.build_critic_network()
-        self.sess = sess
+    
         
-        self.scope = scope
-        self.saver = tf.train.Saver(tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope=self.scope))
 
-    def save(self,dir) :
-        self.saver.save(self.sess,dir + 'critic')
+    def init(self) :
+        self.saver = tf.train.Saver(tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope=self.scope))
+        if(Config.start_episode > 0) :
+            self.load()
+
+    def load(self) :
+        dir = Config.root_dir + '/models/episode-' + str(Config.start_episode) + '/critic/model.ckpt-' + str(Config.start_episode)
+        #ckpt = tf.train.get_checkpoint_state(checkpoint_dir)
+        self.saver.restore(self.sess,dir)
+
+
+    def save(self,dir,episode) :
+        self.saver.save(self.sess,dir + '/critic/model.ckpt',global_step=episode)
 
     def build_critic_network(self) :
 
-        self.state = tf.placeholder(shape=self.input_size,dtype=tf.float32)
-        self.reward = tf.placeholder(shape=[None,1],dtype=tf.float32)
+        self.state = tf.placeholder(shape=self.input_size,dtype=tf.float32,name='state')
+        self.reward = tf.placeholder(shape=[None,1],dtype=tf.float32,name='reward')
 
-        self.outputs = self.build_base_network(self.state,1,None,Config.l2)
+        self.outputs = self.build_base_network(self.state,1,None,'outputs',Config.l2)
 
         loss = tf.losses.mean_squared_error(labels=self.reward,predictions=self.outputs)
         optimizer_train = tf.train.AdamOptimizer(learning_rate=Config.critic_learning_rate)
         self.optimizer = optimizer_train.minimize(loss)
 
-    def build_base_network(self,x,output_size,output_activation,l2=None) :
+    def build_base_network(self,x,output_size,output_activation,output_name=None,l2=None) :
         if(Config.use_pixels) :
             if(Config.network_type == 'mlp') :
-                return models.create_network_pixels_mlp(x,Config.mlp_hidden_layers,Config.mlp_hidden_units,'tanh',output_size,output_activation,l2)
+                return models.create_network_pixels_mlp(x,Config.mlp_hidden_layers,Config.mlp_hidden_units,'tanh',output_size,output_activation,output_name,l2)
             elif(Config.network_type == 'conv2d') :
-                return models.create_network_pixels_conv(x,Config.conv_layers,Config.conv_units,'relu',Config.mlp_hidden_layers,Config.mlp_hidden_units,'tanh',output_size,output_activation,l2)
+                return models.create_network_pixels_conv(x,Config.conv_layers,Config.conv_units,'relu',Config.mlp_hidden_layers,Config.mlp_hidden_units,'tanh',output_size,output_activation,output_name,l2)
             elif(Config.network_type == 'lstm')  :
-                return models.create_network_lstm(x,Config.lstm_layers,Config.lstm_units,Config.mlp_hidden_layers,Config.mlp_hidden_units,'tanh',output_size,output_activation,l2)
+                return models.create_network_lstm(x,Config.lstm_layers,Config.lstm_units,Config.mlp_hidden_layers,Config.mlp_hidden_units,'tanh',output_size,output_activation,output_name,l2)
         elif(Config.network_type == 'mlp') :
-            return models.create_mlp_network(x,Config.mlp_hidden_layers,Config.mlp_hidden_units,'tanh',output_size,output_activation,l2)
+            return models.create_mlp_network(x,Config.mlp_hidden_layers,Config.mlp_hidden_units,'tanh',output_size,output_activation,output_name,l2)
         elif(Config.network_type == 'lstm') :
-            return models.create_network_lstm(x,Config.lstm_layers,Config.lstm_units,Config.mlp_hidden_layers,Config.mlp_hidden_units,'tanh',output_size,output_activation,l2)
+            return models.create_network_lstm(x,Config.lstm_layers,Config.lstm_units,Config.mlp_hidden_layers,Config.mlp_hidden_units,'tanh',output_size,output_activation,output_name,l2)
         else :
             raise Exception('Unable to create base network,check config')
 
