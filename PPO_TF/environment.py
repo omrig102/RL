@@ -15,10 +15,10 @@ class Environment :
     def clone(self,simulator=False) :
         pass
     
-    def getInputSize(self) :
+    def get_input_size(self) :
         pass
 
-    def getOutputSize(self) :
+    def get_output_size(self) :
         pass
 
     def reset(self) :

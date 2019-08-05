@@ -18,6 +18,7 @@ class Config() :
     save_rate = 10
     critic_learning_rate = 0.0001
     actor_learning_rate = 0.0001
+    sigma_limit = 0.01
     use_shuffle = True
     use_pixels = False
     if(use_pixels) :
@@ -25,8 +26,8 @@ class Config() :
         resized_width = 13
     network_type = 'mlp'
     #mlp
-    hidden_layers = 3
-    hidden_units = 128
+    mlp_hidden_layers = 3
+    mlp_hidden_units = 128
     #lstm
     if(network_type == 'lstm') :
         lstm_layers = 1

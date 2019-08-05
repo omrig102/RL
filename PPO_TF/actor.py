@@ -20,52 +20,52 @@ class Actor() :
                 self.input_size.append(Config.resized_width)
                 self.input_size.append(Config.stack_size)
         else :
-            for shape in self.env.getInputSize() :
+            for shape in self.env.get_input_size() :
                 self.input_size.append(shape)
         with tf.variable_scope(scope) as s:
-            self.buildActorNetwork()
+            self.build_actor_network()
         self.sess = sess
 
-    def buildActorNetwork(self) :
+    def build_actor_network(self) :
         if(self.env.is_discrete) :
-            self.buildActorNetworkDiscrete()
+            self.build_actor_network_discrete()
         else :
-            self.buildActorNetworkContinuous()
+            self.build_actor_network_continuous()
 
-    def buildActorNetworkContinuous(self) :
+    def build_actor_network_continuous(self) :
         self.advantage = tf.placeholder(shape=[None,1],dtype=tf.float32)
-        self.old_probs = tf.placeholder(shape=[None,self.env.getOutputSize()],dtype=tf.float32)
+        self.old_probs = tf.placeholder(shape=[None,self.env.get_output_size()],dtype=tf.float32)
         self.state = tf.placeholder(shape=self.input_size,dtype=tf.float32)
-        self.chosen_action = tf.placeholder(shape=[None,self.env.getOutputSize()],dtype=tf.float32)
+        self.chosen_action = tf.placeholder(shape=[None,self.env.get_output_size()],dtype=tf.float32)
         
-        mu_1 = self.build_base_network(self.state,self.env.getOutputSize(),'tanh')
+        mu_1 = self.build_base_network(self.state,self.env.get_output_size(),'tanh',Config.l2)
         
         high = Config.env.env.action_space.high
         low = Config.env.env.action_space.low
         mu = (mu_1 * (high - low) + high + low) / 2
         
-        log_sigma = tf.Variable(np.zeros(self.env.getOutputSize(), dtype=np.float32))
+        log_sigma = tf.Variable(np.zeros(self.env.get_output_size(), dtype=np.float32))
         sigma = tf.exp(log_sigma)
 
         
-        dist = tf.contrib.distributions.Normal(mu,sigma)
+        dist = tf.contrib.distributions.Normal(mu,tf.maximum(sigma,Config.sigma_limit))
         self.action = tf.clip_by_value(dist.sample(1),low,high)
         self.probs = dist.prob(self.chosen_action)
 
         self.loss_continuous()
 
-    def build_base_network(self,x,output_size,output_activation) :
+    def build_base_network(self,x,output_size,output_activation,l2=None) :
         if(Config.use_pixels) :
             if(Config.network_type == 'mlp') :
-                return models.create_network_pixels_mlp(x,Config.hidden_layers,Config.hidden_units,'tanh',output_size,output_activation)
+                return models.create_network_pixels_mlp(x,Config.mlp_hidden_layers,Config.mlp_hidden_units,'tanh',output_size,output_activation,l2)
             elif(Config.network_type == 'conv2d') :
-                return models.create_network_pixels_conv(x,2,128,'relu',Config.hidden_layers,Config.hidden_units,'tanh',output_size,output_activation)
+                return models.create_network_pixels_conv(x,Config.conv_layers,Config.conv_units,'relu',Config.mlp_hidden_layers,Config.mlp_hidden_units,'tanh',output_size,output_activation,l2)
             elif(Config.network_type == 'lstm')  :
-                return models.create_network_lstm(x,Config.lstm_layers,Config.lstm_units,Config.hidden_layers,Config.hidden_units,'tanh',output_size,output_activation)
+                return models.create_network_lstm(x,Config.lstm_layers,Config.lstm_units,Config.mlp_hidden_layers,Config.mlp_hidden_units,'tanh',output_size,output_activation,l2)
         elif(Config.network_type == 'mlp') :
-            return models.create_mlp_network(x,Config.hidden_layers,Config.hidden_units,'tanh',output_size,output_activation)
+            return models.create_mlp_network(x,Config.mlp_hidden_layers,Config.mlp_hidden_units,'tanh',output_size,output_activation,l2)
         elif(Config.network_type == 'lstm') :
-            return models.create_network_lstm(x,Config.lstm_layers,Config.lstm_units,Config.hidden_layers,Config.hidden_units,'tanh',output_size,output_activation)
+            return models.create_network_lstm(x,Config.lstm_layers,Config.lstm_units,Config.mlp_hidden_layers,Config.mlp_hidden_units,'tanh',output_size,output_activation,l2)
         else :
             raise Exception('Unable to create base network,check config')
 
@@ -87,13 +87,13 @@ class Actor() :
         optimizer = tf.train.AdamOptimizer(learning_rate=Config.actor_learning_rate)
         self.optimizer = optimizer.minimize(loss)
 
-    def buildActorNetworkDiscrete(self) :
-        self.mask = tf.placeholder(shape=[None,self.env.getOutputSize()],dtype=tf.float32)
+    def build_actor_network_discrete(self) :
+        self.mask = tf.placeholder(shape=[None,self.env.get_output_size()],dtype=tf.float32)
         self.advantage = tf.placeholder(shape=[None,1],dtype=tf.float32)
-        self.old_probs = tf.placeholder(shape=[None,self.env.getOutputSize()],dtype=tf.float32)
+        self.old_probs = tf.placeholder(shape=[None,self.env.get_output_size()],dtype=tf.float32)
         self.state = tf.placeholder(shape=self.input_size,dtype=tf.float32)
         
-        self.outputs = self.build_base_network(self.state,self.env.getOutputSize(),'softmax')
+        self.outputs = self.build_base_network(self.state,self.env.get_output_size(),'softmax',Config.l2)
 
         self.loss_discrete()
 
@@ -113,21 +113,21 @@ class Actor() :
             for index in range(int(Config.buffer_size/Config.batch_size)) :
                 if(Config.use_shuffle and Config.network_type != 'lstm') :
                     np.random.shuffle(randomize)
-                batch_states,batch_advantages,batch_old_probs,batch_masks = self.prepareBatch(states,advantages,old_probs,masks,index,randomize)
+                batch_states,batch_advantages,batch_old_probs,batch_masks = self.prepare_batch(states,advantages,old_probs,masks,index,randomize)
                 if(self.env.is_discrete) :
-                    self.__trainDiscrete(batch_states,batch_advantages,batch_old_probs,batch_masks)
+                    self.__train_discrete(batch_states,batch_advantages,batch_old_probs,batch_masks)
                 else :
-                    self.__trainContinuous(batch_states,batch_advantages,batch_old_probs,batch_masks)
+                    self.__train_continuous(batch_states,batch_advantages,batch_old_probs,batch_masks)
 
-    def __trainDiscrete(self,batch_states,batch_advantages,batch_old_probs,batch_masks) :
+    def __train_discrete(self,batch_states,batch_advantages,batch_old_probs,batch_masks) :
         self.sess.run(self.optimizer,feed_dict={self.state:batch_states,self.advantage:batch_advantages
                     ,self.old_probs:batch_old_probs,self.mask:batch_masks})
 
-    def __trainContinuous(self,batch_states,batch_advantages,batch_old_probs,batch_actions) :
+    def __train_continuous(self,batch_states,batch_advantages,batch_old_probs,batch_actions) :
         self.sess.run(self.optimizer,feed_dict={self.state:batch_states,self.advantage:batch_advantages
                     ,self.old_probs:batch_old_probs,self.chosen_action:batch_actions})
 
-    def copyTrainables(self,actor_scope) :
+    def copy_trainables(self,actor_scope) :
         e1_params = [t for t in tf.trainable_variables(actor_scope)]
         e1_params = sorted(e1_params, key=lambda v: v.name)
         e2_params = [t for t in tf.trainable_variables(self.scope)]
@@ -140,7 +140,7 @@ class Actor() :
         self.sess.run(update_ops)
 
 
-    def prepareBatch(self,states,advantages,old_probs,masks,current_batch,randomize) :
+    def prepare_batch(self,states,advantages,old_probs,masks,current_batch,randomize) :
         random_states = states[randomize].copy()
         random_advantages = advantages[randomize].copy()
         random_old_probs = old_probs[randomize].copy()

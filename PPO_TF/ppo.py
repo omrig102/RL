@@ -29,10 +29,10 @@ class PPO() :
         init = tf.global_variables_initializer()
         sess.run(init)
         
-        self.old_actor.copyTrainables(self.actor.scope)
+        self.old_actor.copy_trainables(self.actor.scope)
         
     
-    def updateNetworks(self,batch) :
+    def update_networks(self,batch) :
         states,rewards,mask,actions_probs = batch
         
         estimated_rewards = self.critic.predict(states)
@@ -41,19 +41,19 @@ class PPO() :
 
         self.actor.train(states,advantages,actions_probs,mask)
 
-        self.old_actor.copyTrainables(self.actor.scope)
+        self.old_actor.copy_trainables(self.actor.scope)
 
         self.critic.train(states,rewards)
 
 
-    def getDiscountedRewards(self,rewards,done):
+    def get_discounted_rewards(self,rewards,done):
         for j in range(len(rewards) - 2, -1, -1):
             rewards[j] += rewards[j + 1] * Config.gamma
         if(not done) :
             rewards = rewards[:-1]
         return rewards
 
-    def collectBatch(self,state,next_state,total_rewards,episode) :
+    def collect_batch(self,state,next_state,total_rewards,episode) :
         states = []
         batch_states = []
         rewards = []
@@ -85,7 +85,7 @@ class PPO() :
             rewards.append(reward)
             total_rewards += reward
             if(done) :
-                batch_rewards += self.getDiscountedRewards(rewards,True)
+                batch_rewards += self.get_discounted_rewards(rewards,True)
                 batch_states += states
                 states = []
                 rewards = []
@@ -99,7 +99,7 @@ class PPO() :
                 next_state = None
 
         if(len(states) > 0) :
-            rewards = self.getDiscountedRewards(rewards,False)
+            rewards = self.get_discounted_rewards(rewards,False)
             batch_rewards += rewards
             if(len(rewards) < len(states)) :
                 states = states[:-1]
@@ -186,8 +186,8 @@ class PPO() :
         total_rewards = 0
         episode = 0
         while(True) :
-            batch,end,episode,total_rewards,state,next_state = self.collectBatch(state,next_state,total_rewards,episode)
-            self.updateNetworks(batch)
+            batch,end,episode,total_rewards,state,next_state = self.collect_batch(state,next_state,total_rewards,episode)
+            self.update_networks(batch)
             if(end) :
                 break
 

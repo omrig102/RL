@@ -18,37 +18,37 @@ class Critic() :
                 self.input_size.append(Config.resized_width)
                 self.input_size.append(Config.stack_size)
         else :
-            for shape in self.env.getInputSize() :
+            for shape in self.env.get_input_size() :
                 self.input_size.append(shape)
         with tf.variable_scope(scope) as s:
-            self.buildCriticNetwork()
+            self.build_critic_network()
         self.sess = sess
         
         self.scope = scope
 
-    def buildCriticNetwork(self) :
+    def build_critic_network(self) :
 
         self.state = tf.placeholder(shape=self.input_size,dtype=tf.float32)
         self.reward = tf.placeholder(shape=[None,1],dtype=tf.float32)
 
-        self.outputs = self.build_base_network(self.state,1,None)
+        self.outputs = self.build_base_network(self.state,1,None,Config.l2)
 
         loss = tf.losses.mean_squared_error(labels=self.reward,predictions=self.outputs)
         optimizer_train = tf.train.AdamOptimizer(learning_rate=Config.critic_learning_rate)
         self.optimizer = optimizer_train.minimize(loss)
 
-    def build_base_network(self,x,output_size,output_activation) :
+    def build_base_network(self,x,output_size,output_activation,l2=None) :
         if(Config.use_pixels) :
             if(Config.network_type == 'mlp') :
-                return models.create_network_pixels_mlp(x,Config.hidden_layers,Config.hidden_units,'tanh',output_size,output_activation)
+                return models.create_network_pixels_mlp(x,Config.mlp_hidden_layers,Config.mlp_hidden_units,'tanh',output_size,output_activation,l2)
             elif(Config.network_type == 'conv2d') :
-                return models.create_network_pixels_conv(x,2,128,'relu',Config.hidden_layers,Config.hidden_units,'tanh',output_size,output_activation)
+                return models.create_network_pixels_conv(x,Config.conv_layers,Config.conv_units,'relu',Config.mlp_hidden_layers,Config.mlp_hidden_units,'tanh',output_size,output_activation,l2)
             elif(Config.network_type == 'lstm')  :
-                return models.create_network_lstm(x,Config.lstm_layers,Config.lstm_units,Config.hidden_layers,Config.hidden_units,'tanh',output_size,output_activation)
+                return models.create_network_lstm(x,Config.lstm_layers,Config.lstm_units,Config.mlp_hidden_layers,Config.mlp_hidden_units,'tanh',output_size,output_activation,l2)
         elif(Config.network_type == 'mlp') :
-            return models.create_mlp_network(x,Config.hidden_layers,Config.hidden_units,'tanh',output_size,output_activation)
+            return models.create_mlp_network(x,Config.mlp_hidden_layers,Config.mlp_hidden_units,'tanh',output_size,output_activation,l2)
         elif(Config.network_type == 'lstm') :
-            return models.create_network_lstm(x,Config.lstm_layers,Config.lstm_units,Config.hidden_layers,Config.hidden_units,'tanh',output_size,output_activation)
+            return models.create_network_lstm(x,Config.lstm_layers,Config.lstm_units,Config.mlp_hidden_layers,Config.mlp_hidden_units,'tanh',output_size,output_activation,l2)
         else :
             raise Exception('Unable to create base network,check config')
 
@@ -62,11 +62,11 @@ class Critic() :
             for index in range(int(Config.buffer_size/Config.batch_size)) :
                 if(Config.use_shuffle and Config.network_type != 'lstm') :
                     np.random.shuffle(randomize)
-                batch_states,batch_rewards = self.prepareBatch(states,rewards,index,randomize)
+                batch_states,batch_rewards = self.prepare_batch(states,rewards,index,randomize)
                 self.sess.run(self.optimizer,feed_dict={self.state:batch_states,self.reward:batch_rewards})
         
 
-    def prepareBatch(self,states,values,current_batch,randomized) :
+    def prepare_batch(self,states,values,current_batch,randomized) :
         random_states = states[randomized].copy()
         random_values = values[randomized].copy()
         
