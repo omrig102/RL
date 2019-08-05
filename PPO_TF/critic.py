@@ -49,7 +49,7 @@ class Critic() :
         self.state = tf.placeholder(shape=self.input_size,dtype=tf.float32,name='state')
         self.reward = tf.placeholder(shape=[None,1],dtype=tf.float32,name='reward')
 
-        self.outputs = self.build_base_network(self.state,1,None,'outputs',Config.l2)
+        self.outputs = self.build_base_network(self.state,1,None,'outputs')
 
         loss = tf.losses.mean_squared_error(labels=self.reward,predictions=self.outputs)
         optimizer_train = tf.train.AdamOptimizer(learning_rate=Config.critic_learning_rate)
@@ -62,11 +62,11 @@ class Critic() :
             elif(Config.network_type == 'conv2d') :
                 return models.create_network_pixels_conv(x,Config.conv_layers,Config.conv_units,'relu',Config.mlp_hidden_layers,Config.mlp_hidden_units,'tanh',output_size,output_activation,output_name,l2)
             elif(Config.network_type == 'lstm')  :
-                return models.create_network_lstm(x,Config.lstm_layers,Config.lstm_units,Config.mlp_hidden_layers,Config.mlp_hidden_units,'tanh',output_size,output_activation,output_name,l2)
+                return models.create_network_lstm(x,Config.lstm_layers,Config.lstm_units,Config.unit_type,Config.mlp_hidden_layers,Config.mlp_hidden_units,'tanh',output_size,output_activation,output_name,l2)
         elif(Config.network_type == 'mlp') :
             return models.create_mlp_network(x,Config.mlp_hidden_layers,Config.mlp_hidden_units,'tanh',output_size,output_activation,output_name,l2)
         elif(Config.network_type == 'lstm') :
-            return models.create_network_lstm(x,Config.lstm_layers,Config.lstm_units,Config.mlp_hidden_layers,Config.mlp_hidden_units,'tanh',output_size,output_activation,output_name,l2)
+            return models.create_network_lstm(x,Config.lstm_layers,Config.lstm_units,Config.unit_type,Config.mlp_hidden_layers,Config.mlp_hidden_units,'tanh',output_size,output_activation,output_name,l2)
         else :
             raise Exception('Unable to create base network,check config')
 

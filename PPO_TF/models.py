@@ -39,9 +39,14 @@ def create_conv2d_layers(input,hidden_layers,hidden_size,hidden_activation,flatt
 '''
     input.shape = [timestamps,None,input_size]
 '''
-def create_lstm_layers(input,hidden_layers,hidden_size) :
+def create_lstm_layers(input,hidden_layers,hidden_size,unit_type) :
     x = input
-    rnn = tf.contrib.cudnn_rnn.CudnnLSTM(hidden_layers, hidden_size)
+    if(unit_type == 'lstm') :
+        rnn = tf.contrib.cudnn_rnn.CudnnLSTM(hidden_layers, hidden_size)
+    elif(unit_type == 'gru') :
+        rnn = tf.contrib.cudnn_rnn.CudnnGRU(hidden_layers, hidden_size)
+    else :
+        raise Exception('unit type not supported : {}'.format(unit_type))
     x,_ = rnn(x)   
 
     return x
@@ -57,11 +62,11 @@ def create_mlp_network(input,hidden_layers,hidden_size,hidden_activation,output_
 '''
     input_shape = [None,timestamps,input_size]
 '''
-def create_network_lstm(input,lstm_hidden_layers,lstm_hidden_size
+def create_network_lstm(input,lstm_hidden_layers,lstm_hidden_size,unit_type
 ,mlp_hidden_layers,mlp_hidden_size,mlp_hidden_activation,output_size,output_activation,output_name,l2=None) :
     input_shape = input.get_shape().as_list()
     x = tf.transpose(input,[1,0,2])
-    x = create_lstm_layers(x,lstm_hidden_layers,lstm_hidden_size)
+    x = create_lstm_layers(x,lstm_hidden_layers,lstm_hidden_size,unit_type)
     x = tf.transpose(x,[1,0,2])
     x = x[:,-1,:]
     x = tf.reshape(x,[-1,lstm_hidden_size])
