@@ -1,48 +1,90 @@
 import tensorflow as tf
 from config import Config
 import numpy as np
+import models
+import os
 
 class Critic() :
 
-    def __init__(self,sess,input_size,output_size,use_pixels,scope) :
-        self.input_size = input_size
-        self.output_size = output_size
-        self.use_pixels = use_pixels
-        with tf.variable_scope(scope) as s:
-            self.buildCriticNetwork()
+    def __init__(self,sess,env,scope) :
+        self.env = env
+        self.input_size = [None]
+        if(Config.network_type == 'lstm') :
+            self.input_size.append(Config.timestamps)
+        if(Config.use_pixels) :
+            if(Config.network_type == 'mlp' or Config.network_type == 'lstm') :
+                self.input_size.append(Config.resized_height * Config.resized_width)
+            else :
+                self.input_size.append(Config.resized_height)
+                self.input_size.append(Config.resized_width)
+                self.input_size.append(Config.stack_size)
+        else :
+            for shape in self.env.get_input_size() :
+                self.input_size.append(shape)
+
         self.sess = sess
         self.scope = scope
+        
+        with tf.variable_scope(scope) as s:
+            self.build_critic_network()
+    
+        
 
-    def buildCriticNetwork(self) :
-        self.critic_input = tf.placeholder(shape=self.input_size,dtype=tf.float32)
-        self.critic_value = tf.placeholder(shape=[None,1],dtype=tf.float32)
-        current_layer = self.critic_input
-        if(self.use_pixels and Config.use_conv_layers) :
-            current_layer = tf.layers.conv2d(current_layer,filters=48,kernel_size=3,strides=1,activation=tf.nn.relu)
-            current_layer = tf.layers.conv2d(current_layer,filters=48,kernel_size=3,strides=1,activation=tf.nn.relu)
-            current_layer = tf.layers.flatten(current_layer)
-        elif(self.use_pixels) :
-            current_layer = tf.reshape(current_layer,shape=[-1,self.input_size[1] * self.input_size[2] * self.input_size[3]])
-        for _ in range(Config.hidden_size) :
-            current_layer = tf.layers.dense(current_layer,units=Config.hidden_units,activation=tf.nn.relu)
+    def init(self) :
+        self.saver = tf.train.Saver(tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope=self.scope))
+        if(Config.start_episode > 0) :
+            self.load()
 
-        self.critic_output = tf.layers.dense(current_layer,units=1,activation=None)
+    def load(self) :
+        dir = Config.root_dir + '/models/episode-' + str(Config.start_episode) + '/critic/model.ckpt-' + str(Config.start_episode)
+        #ckpt = tf.train.get_checkpoint_state(checkpoint_dir)
+        self.saver.restore(self.sess,dir)
 
-        #ratio = self.critic_output / (self.old_outputs + 1e-10)
-        loss = tf.losses.mean_squared_error(labels=self.critic_value,predictions=self.critic_output)
-        #unclipped = ratio * loss
-        #clipped = tf.clip_by_value(ratio,1-Config.epsilon,1+Config.epsilon) * loss
-        #loss = tf.reduce_mean(tf.minimum(clipped,unclipped))
-        optimizer = tf.train.AdamOptimizer(learning_rate=Config.critic_learning_rate)
-        self.critic_optimizer = optimizer.minimize(loss)
+
+    def save(self,dir,episode) :
+        self.saver.save(self.sess,dir + '/critic/model.ckpt',global_step=episode)
+
+    def build_critic_network(self) :
+
+        self.state = tf.placeholder(shape=self.input_size,dtype=tf.float32,name='state')
+        self.reward = tf.placeholder(shape=[None,1],dtype=tf.float32,name='reward')
+
+        self.outputs = self.build_base_network(self.state,1,None,'outputs')
+
+        loss = tf.losses.mean_squared_error(labels=self.reward,predictions=self.outputs)
+        optimizer_train = tf.train.AdamOptimizer(learning_rate=Config.critic_learning_rate)
+        self.optimizer = optimizer_train.minimize(loss)
+
+    def build_base_network(self,x,output_size,output_activation,output_name=None,l2=None) :
+        if(Config.use_pixels) :
+            if(Config.network_type == 'mlp') :
+                return models.create_network_pixels_mlp(x,Config.mlp_hidden_layers,Config.mlp_hidden_units,'tanh',output_size,output_activation,output_name,l2)
+            elif(Config.network_type == 'conv2d') :
+                return models.create_network_pixels_conv(x,Config.conv_layers,Config.conv_units,'relu',Config.mlp_hidden_layers,Config.mlp_hidden_units,'tanh',output_size,output_activation,output_name,l2)
+            elif(Config.network_type == 'lstm')  :
+                return models.create_network_lstm(x,Config.lstm_layers,Config.lstm_units,Config.unit_type,Config.mlp_hidden_layers,Config.mlp_hidden_units,'tanh',output_size,output_activation,output_name,l2)
+        elif(Config.network_type == 'mlp') :
+            return models.create_mlp_network(x,Config.mlp_hidden_layers,Config.mlp_hidden_units,'tanh',output_size,output_activation,output_name,l2)
+        elif(Config.network_type == 'lstm') :
+            return models.create_network_lstm(x,Config.lstm_layers,Config.lstm_units,Config.unit_type,Config.mlp_hidden_layers,Config.mlp_hidden_units,'tanh',output_size,output_activation,output_name,l2)
+        else :
+            raise Exception('Unable to create base network,check config')
+
 
     def predict(self,state) :
-        return self.sess.run(self.critic_output,feed_dict={self.critic_input:state})
+        return self.sess.run(self.outputs,feed_dict={self.state:state})
 
-    def train(self,state,value) :
-        self.sess.run(self.critic_optimizer,feed_dict={self.critic_input:state,self.critic_value:value})
+    def train(self,states,rewards) :
+        randomize = np.arange(len(states))
+        for _ in range(Config.epochs) :
+            for index in range(int(Config.buffer_size/Config.batch_size)) :
+                if(Config.use_shuffle and Config.network_type != 'lstm') :
+                    np.random.shuffle(randomize)
+                batch_states,batch_rewards = self.prepare_batch(states,rewards,index,randomize)
+                self.sess.run(self.optimizer,feed_dict={self.state:batch_states,self.reward:batch_rewards})
+        
 
-    def prepareBatch(self,states,values,current_batch,randomized) :
+    def prepare_batch(self,states,values,current_batch,randomized) :
         random_states = states[randomized].copy()
         random_values = values[randomized].copy()
         
