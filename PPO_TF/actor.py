@@ -56,6 +56,8 @@ class Actor() :
         self.state = tf.placeholder(shape=self.input_size,dtype=tf.float32,name='state')
         self.chosen_action = tf.placeholder(shape=[None,self.env.get_output_size()],dtype=tf.float32,name='chosen_action')
         
+        
+
         mu_1 = self.build_base_network(self.state,self.env.get_output_size(),'tanh',l2=Config.l2)
         
         high = Config.env.env.action_space.high
@@ -91,10 +93,10 @@ class Actor() :
             raise Exception('Unable to create base network,check config')
 
     def loss_continuous(self) :
-        ratio = self.probs / (self.old_probs + 1e-10)
+        ratio = tf.exp(tf.log(self.probs + 1e-10) - tf.log(self.old_probs + 1e-10))
         unclipped = ratio * self.advantage
         clipped = tf.clip_by_value(ratio,1-Config.epsilon,1+Config.epsilon) * self.advantage
-        loss = -tf.reduce_mean(tf.minimum(unclipped,clipped) + Config.entropy * -(self.probs * tf.log(self.probs + 1e-10)))
+        loss = -tf.reduce_mean(tf.minimum(unclipped,clipped))
         optimizer = tf.train.AdamOptimizer(learning_rate=Config.actor_learning_rate)
         self.optimizer = optimizer.minimize(loss)
 
@@ -130,12 +132,20 @@ class Actor() :
             return action,action_probs
 
     def train(self,states,advantages,old_probs,masks) :
+        '''dataset = tf.data.Dataset.from_tensor_slices((states,advantages,old_probs,masks))
+        dataset = dataset.shuffle(buffer_size=10000)
+        dataset = dataset.batch(Config.batch_size)
+        #dataset = dataset.repeat(Config.epochs)
+        iterator = dataset.make_initializable_iterator()
+        batch = iterator.get_next()'''
         randomize = np.arange(len(states))
         for _ in range(Config.epochs) :
+            #self.sess.run(iterator.initializer)
             for index in range(int(Config.buffer_size/Config.batch_size)) :
                 if(Config.use_shuffle and Config.network_type != 'lstm') :
                     np.random.shuffle(randomize)
                 batch_states,batch_advantages,batch_old_probs,batch_masks = self.prepare_batch(states,advantages,old_probs,masks,index,randomize)
+                #batch_states,batch_advantages,batch_old_probs,batch_masks = self.sess.run(batch)
                 if(self.env.is_discrete) :
                     self.__train_discrete(batch_states,batch_advantages,batch_old_probs,batch_masks)
                 else :

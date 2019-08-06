@@ -8,7 +8,7 @@ class Config() :
     #game = 'SuperMarioBros-v0'
     game = 'LunarLanderContinuous-v2'
     root_dir = '.'
-    episodes = 10000
+    episodes = 100000
     start_episode = 0
     batch_size = 32
     buffer_size = 8192
@@ -16,9 +16,9 @@ class Config() :
     epsilon=0.2
     entropy = 0.1
     gamma = 0.99
-    l2 = 0.001
+    l2 = 0.0001
     save_rate = 50
-    critic_learning_rate = 0.0001
+    critic_learning_rate = 0.001
     actor_learning_rate = 0.0001
     sigma_limit = None
     use_shuffle = True
@@ -29,7 +29,7 @@ class Config() :
     network_type = 'mlp'
     #mlp
     mlp_hidden_layers = 2
-    mlp_hidden_units = 128
+    mlp_hidden_units = 256
     #lstm
     if(network_type == 'lstm') :
         lstm_layers = 1
@@ -42,11 +42,6 @@ class Config() :
         conv_units = 128
         stack_size = 4
         
-
-    
-    
-    
-    
     save_video = True
     save_video_interval = 10
     #env = MarioEnvironment(game,save_video=save_video,save_video_interval=save_video_interval)
