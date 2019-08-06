@@ -54,7 +54,7 @@ def create_lstm_layers(input,hidden_layers,hidden_size,unit_type) :
 '''
     input.shape = [None,input_size]
 '''
-def create_mlp_network(input,hidden_layers,hidden_size,hidden_activation,output_size,output_activation,output_name=None,l2=None) :
+def create_mlp_network(input,hidden_layers,hidden_size,hidden_activation,output_size=None,output_activation=None,output_name=None,l2=None) :
     x = input
     x = create_mlp_layers(x,hidden_layers,hidden_size,hidden_activation,output_size,output_activation,output_name,l2)
     return x
@@ -63,7 +63,7 @@ def create_mlp_network(input,hidden_layers,hidden_size,hidden_activation,output_
     input_shape = [None,timestamps,input_size]
 '''
 def create_network_lstm(input,lstm_hidden_layers,lstm_hidden_size,unit_type
-,mlp_hidden_layers,mlp_hidden_size,mlp_hidden_activation,output_size,output_activation,output_name,l2=None) :
+,mlp_hidden_layers,mlp_hidden_size,mlp_hidden_activation,output_size=None,output_activation=None,output_name=None,l2=None) :
     input_shape = input.get_shape().as_list()
     x = tf.transpose(input,[1,0,2])
     x = create_lstm_layers(x,lstm_hidden_layers,lstm_hidden_size,unit_type)
@@ -77,7 +77,7 @@ def create_network_lstm(input,lstm_hidden_layers,lstm_hidden_size,unit_type
 '''
     input.shape = [None,height,width,channels]
 '''
-def create_network_pixels_mlp(input,hidden_layers,hidden_size,hidden_activation,output_size,output_activation,output_name,l2=None) :
+def create_network_pixels_mlp(input,hidden_layers,hidden_size,hidden_activation,output_size=None,output_activation=None,output_name=None,l2=None) :
     input_shape = input.get_shape().as_list()
     x = input
     #x = tf.reshape(input,[-1,input_shape[1] * input_shape[2] * input_shape[3]])
@@ -87,7 +87,7 @@ def create_network_pixels_mlp(input,hidden_layers,hidden_size,hidden_activation,
     input.shape = [None,height,width,channels]
 '''      
 def create_network_pixels_conv(input,conv_hidden_layers,conv_hidden_size,conv_hidden_activation
-,mlp_hidden_layers,mlp_hidden_size,mlp_hidden_activation,output_size,output_activation,output_name,l2=None) :
+,mlp_hidden_layers,mlp_hidden_size,mlp_hidden_activation,output_size=None,output_activation=None,output_name=None,l2=None) :
     input_shape = input.get_shape().as_list()
     x = input
     x = create_conv2d_layers(x,conv_hidden_layers,conv_hidden_size,conv_hidden_activation,flatten=True,l2=l2)

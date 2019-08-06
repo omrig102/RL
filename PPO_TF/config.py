@@ -6,12 +6,12 @@ import pickle
 class Config() :
 
     #game = 'SuperMarioBros-v0'
-    game = 'LunarLanderContinuous-v2'
+    game = 'LunarLander-v2'
     root_dir = '.'
     episodes = 100000
     start_episode = 0
     batch_size = 32
-    buffer_size = 8192
+    buffer_size = 256
     epochs = 10
     epsilon=0.2
     entropy = 0.1
@@ -26,6 +26,7 @@ class Config() :
     if(use_pixels) :
         resized_height = 13
         resized_width = 13
+    shared_network = True
     network_type = 'mlp'
     #mlp
     mlp_hidden_layers = 2
@@ -77,6 +78,7 @@ class Config() :
             if(cls.use_pixels) :
                 cls.resized_height = config.resized_height
                 cls.resized_width = config.resized_width
+            cls.shared_network = config.shared_network
             cls.network_type = config.network_type
             #mlp
             cls.mlp_hidden_layers = config.mlp_hidden_layers

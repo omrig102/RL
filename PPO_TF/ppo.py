@@ -6,6 +6,7 @@ import os
 import tensorflow as tf
 from critic import Critic
 from actor import Actor
+from actor_critic import ActorCritic
 import cv2
 
 #from pyvirtualdisplay import Display
@@ -20,20 +21,26 @@ class PPO() :
         if(Config.start_episode > 0) :
             Config.load()
         self.env = Config.env.clone()
-        self.critic = Critic(sess,self.env,'critic')
-        self.actor = Actor(sess,self.env,'new_actor')
-        self.old_actor = Actor(sess,self.env,'old_actor')
+        if(Config.shared_network) :
+            self.actor_critic = ActorCritic(sess,self.env,'new')
+            self.old_actor_critic = ActorCritic(sess,self.env,'old')
+        else :
+            self.critic = Critic(sess,self.env,'critic')
+            self.actor = Actor(sess,self.env,'new_actor')
+            self.old_actor = Actor(sess,self.env,'old_actor')
         
         #coord = tf.train.Coordinator()
         #threads = tf.train.start_queue_runners(sess=sess, coord=coord)
         init = tf.global_variables_initializer()
         sess.run(init)
-        
-        self.critic.init()
-        self.actor.init()
-        self.old_actor.init()
+        if(Config.shared_network) :
+            self.old_actor_critic.copy_trainables(self.actor_critic.scope)
+        else :
+            self.critic.init()
+            self.actor.init()
+            self.old_actor.init()
 
-        self.old_actor.copy_trainables(self.actor.scope)
+            self.old_actor.copy_trainables(self.actor.scope)
         
     
 
@@ -50,16 +57,20 @@ class PPO() :
     
     def update_networks(self,batch) :
         states,rewards,mask,actions_probs = batch
-        
-        estimated_rewards = self.critic.predict(states)
+        if(Config.shared_network) :
+            estimated_rewards = self.actor_critic.predict_critic(states)
+        else :
+            estimated_rewards = self.critic.predict(states)
         rewards = rewards.reshape([rewards.shape[0],1])
         advantages = rewards - estimated_rewards
 
-        self.actor.train(states,advantages,actions_probs,mask)
-
-        self.old_actor.copy_trainables(self.actor.scope)
-
-        self.critic.train(states,rewards)
+        if(Config.shared_network) :
+            self.actor_critic.train(states,advantages,actions_probs,mask,rewards)
+            self.old_actor_critic.copy_trainables(self.actor_critic.scope)
+        else :
+            self.actor.train(states,advantages,actions_probs,mask)
+            self.old_actor.copy_trainables(self.actor.scope)
+            self.critic.train(states,rewards)
 
 
     def get_discounted_rewards(self,rewards,done):
@@ -81,7 +92,10 @@ class PPO() :
             states.append(state) 
 
             if(self.env.is_discrete) :
-                actions_probs = self.old_actor.predict(np.expand_dims(state,axis=0))
+                if(Config.shared_network) :
+                    actions_probs = self.old_actor_critic.predict_actor(np.expand_dims(state,axis=0))
+                else :
+                    actions_probs = self.old_actor.predict(np.expand_dims(state,axis=0))
                 actions_probs = actions_probs.reshape([actions_probs.shape[1]])
                 action = np.random.choice(range(len(actions_probs)),p=actions_probs)
                 current_action = np.zeros(shape=actions_probs.shape)
@@ -90,7 +104,10 @@ class PPO() :
                 mask.append(current_action)
                 batch_actions_probs.append(actions_probs)
             else :
-                action,action_probs = self.old_actor.predict(np.expand_dims(state,axis=0))
+                if(Config.shared_network) :
+                    action,action_probs = self.old_actor_critic.predict_actor(np.expand_dims(state,axis=0))
+                else :
+                    action,action_probs = self.old_actor.predict(np.expand_dims(state,axis=0))
                 action = action.reshape([action.shape[1]])
                 action_probs = action_probs.reshape([action_probs.shape[1]])
                 mask.append(action)
@@ -108,8 +125,8 @@ class PPO() :
                 data = 'episode {}/{} \t reward  {}'.format(episode,Config.episodes,total_rewards)
                 print(colored(data,'green'))
                 total_rewards = 0
-                if(episode % Config.save_rate == 0) :
-                    self.save(episode)
+                #if(episode % Config.save_rate == 0) :
+                #    self.save(episode)
                 episode += 1
                 state = self.env.reset()
                 next_state = None
