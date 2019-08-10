@@ -15,6 +15,7 @@ class GymEnvironment(Environment) :
         self.initialize()
         self.get_input_size()
         self.get_output_size()
+        
 
     def render(self) :
         self.env.render()

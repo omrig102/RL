@@ -1,35 +1,37 @@
 from gym_environment import GymEnvironment
 from mario_environment import MarioEnvironment
+from retro_environment import RetroEnvironment
 import pickle
 
 
 class Config() :
 
     #game = 'SuperMarioBros-v0'
-    game = 'LunarLanderContinuous-v2'
+    game = 'BipedalWalkerHardcore-v2'
     root_dir = '.'
     episodes = 100000
     start_episode = 0
-    batch_size = 32
-    buffer_size = 8192
+    batch_size = 1024
+    buffer_size = 4096
     epochs = 10
     epsilon=0.2
     entropy = 0.1
     gamma = 0.99
-    l2 = 0.0001
-    save_rate = 50
+    l2 = None
+    reward_scaler = 'positive'
+    save_rate = 10
     critic_learning_rate = 0.001
     actor_learning_rate = 0.0001
     sigma_limit = None
     use_shuffle = True
     use_pixels = False
     if(use_pixels) :
-        resized_height = 13
-        resized_width = 13
+        resized_height = 84
+        resized_width = 84
     network_type = 'mlp'
     #mlp
     mlp_hidden_layers = 2
-    mlp_hidden_units = 256
+    mlp_hidden_units = [128,128]
     #lstm
     if(network_type == 'lstm') :
         lstm_layers = 1
@@ -38,14 +40,16 @@ class Config() :
         timestamps = 4
     #conv2d
     elif(network_type == 'conv2d' and use_pixels) :
-        conv_layers = 2
-        conv_units = 128
+        conv_layers = 3
+        conv_units = [32,64,64]
         stack_size = 4
         
     save_video = True
-    save_video_interval = 10
+    save_video_interval = 50
     #env = MarioEnvironment(game,save_video=save_video,save_video_interval=save_video_interval)
+    #env = RetroEnvironment(game,save_video=save_video,save_video_interval=save_video_interval)
     env = GymEnvironment(game,save_video=save_video,save_video_interval=save_video_interval)
+    env.close()
 
     @classmethod
     def save(cls) :
