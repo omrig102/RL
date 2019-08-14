@@ -7,7 +7,8 @@ import tensorflow as tf
 from critic import Critic
 from actor import Actor
 import cv2
-
+import matplotlib.pyplot as plt
+import scipy.misc
 #from pyvirtualdisplay import Display
 #display = Display(visible=0, size=(1400, 900))
 #display.start()
@@ -34,6 +35,7 @@ class PPO() :
         self.old_actor.init()
 
         self.old_actor.copy_trainables(self.actor.scope)
+        self.timesteps = 0
         
     
 
@@ -98,8 +100,10 @@ class PPO() :
 
             
             next_state,reward,done,_ = self.env.step(action)
-            rewards.append(reward)
+            rewards.append(self.reward_scaler(reward))
             total_rewards += reward
+            
+
             if(done) :
                 batch_rewards += self.get_discounted_rewards(rewards,True)
                 batch_states += states
@@ -107,12 +111,14 @@ class PPO() :
                 rewards = []
                 data = 'episode {}/{} \t reward  {}'.format(episode,Config.episodes,total_rewards)
                 print(colored(data,'green'))
+                print(colored('timesteps : {}'.format(self.timesteps),'green'))
                 total_rewards = 0
                 if(episode % Config.save_rate == 0) :
                     self.save(episode)
                 episode += 1
                 state = self.env.reset()
                 next_state = None
+            self.timesteps += 1
 
         if(len(states) > 0) :
             rewards = self.get_discounted_rewards(rewards,False)
@@ -130,10 +136,16 @@ class PPO() :
             end = False
         return batch,end,episode,total_rewards,state,next_state
 
+    def reward_scaler(self,reward) :
+        if(Config.reward_scaler == 'positive') :
+            return max(-0.001, reward / 100.0)
+        if(Config.reward_scaler == 'scale') :
+            return reward / 100
+
     def preprocess_pixels(self,state,next_state) :
         if(next_state is not None) :
-            frame = cv2.resize(next_state,(Config.resized_width,Config.resized_height))
-            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            frame = cv2.cvtColor(next_state, cv2.COLOR_RGB2GRAY)
+            frame = cv2.resize(frame,(Config.resized_width,Config.resized_height),interpolation=cv2.INTER_AREA) / 255
             if(Config.network_type == 'mlp' or Config.network_type == 'lstm') :
                 frame = frame.reshape([Config.resized_width * Config.resized_height])
             elif(Config.network_type == 'conv2d') :
@@ -161,8 +173,8 @@ class PPO() :
                         res.append(stack[:,:,index])
                 return np.stack(res,axis=2)
         else :
-            frame = cv2.resize(state,(Config.resized_width,Config.resized_height))
-            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            frame = cv2.cvtColor(state, cv2.COLOR_RGB2GRAY)
+            frame = cv2.resize(frame,(Config.resized_width,Config.resized_height),interpolation=cv2.INTER_AREA) / 255
             if(Config.network_type == 'mlp' or Config.network_type == 'lstm') :
                 frame = frame.reshape([Config.resized_width * Config.resized_height])
             elif(Config.network_type == 'conv2d') :

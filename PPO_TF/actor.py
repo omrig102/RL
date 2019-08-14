@@ -27,9 +27,6 @@ class Actor() :
         self.sess = sess
         with tf.variable_scope(scope) as s:
                 self.build_actor_network()
-            
-       
-            
 
     def init(self) :
         self.saver = tf.train.Saver(tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope=self.scope))
@@ -58,7 +55,7 @@ class Actor() :
         
         
 
-        mu_1 = self.build_base_network(self.state,self.env.get_output_size(),'tanh',l2=Config.l2)
+        mu_1 = self.build_base_network(self.state,self.env.get_output_size(),tf.nn.tanh,l2=Config.l2,use_noise=False)
         
         high = Config.env.env.action_space.high
         low = Config.env.env.action_space.low
@@ -77,18 +74,18 @@ class Actor() :
 
         self.loss_continuous()
 
-    def build_base_network(self,x,output_size,output_activation,output_name=None,l2=None) :
+    def build_base_network(self,x,output_size,output_activation,output_name=None,l2=None,use_noise=False) :
         if(Config.use_pixels) :
             if(Config.network_type == 'mlp') :
-                return models.create_network_pixels_mlp(x,Config.mlp_hidden_layers,Config.mlp_hidden_units,'tanh',output_size,output_activation,output_name,l2)
+                return models.create_network_pixels_mlp(x,Config.mlp_hidden_layers,Config.mlp_hidden_units,tf.nn.tanh,output_size,output_activation,output_name,use_noise,l2)
             elif(Config.network_type == 'conv2d') :
-                return models.create_network_pixels_conv(x,Config.conv_layers,Config.conv_units,'relu',Config.mlp_hidden_layers,Config.mlp_hidden_units,'tanh',output_size,output_activation,output_name,l2)
+                return models.create_network_pixels_conv(x,Config.conv_layers,Config.conv_units,tf.nn.relu,Config.mlp_hidden_layers,Config.mlp_hidden_units,tf.nn.tanh,output_size,output_activation,output_name,use_noise,l2)
             elif(Config.network_type == 'lstm')  :
-                return models.create_network_lstm(x,Config.lstm_layers,Config.lstm_units,Config.unit_type,Config.mlp_hidden_layers,Config.mlp_hidden_units,'tanh',output_size,output_activation,output_name,l2)
+                return models.create_network_lstm(x,Config.lstm_layers,Config.lstm_units,Config.unit_type,Config.mlp_hidden_layers,Config.mlp_hidden_units,tf.nn.tanh,output_size,output_activation,output_name,use_noise,l2)
         elif(Config.network_type == 'mlp') :
-            return models.create_mlp_network(x,Config.mlp_hidden_layers,Config.mlp_hidden_units,'tanh',output_size,output_activation,output_name,l2)
+            return models.create_mlp_network(x,Config.mlp_hidden_layers,Config.mlp_hidden_units,tf.nn.tanh,output_size,output_activation,output_name,use_noise,l2)
         elif(Config.network_type == 'lstm') :
-            return models.create_network_lstm(x,Config.lstm_layers,Config.lstm_units,Config.unit_type,Config.mlp_hidden_layers,Config.mlp_hidden_units,'tanh',output_size,output_activation,output_name,l2)
+            return models.create_network_lstm(x,Config.lstm_layers,Config.lstm_units,Config.unit_type,Config.mlp_hidden_layers,Config.mlp_hidden_units,tf.nn.tanh,output_size,output_activation,output_name,use_noise,l2)
         else :
             raise Exception('Unable to create base network,check config')
 
@@ -116,7 +113,7 @@ class Actor() :
         self.old_probs = tf.placeholder(shape=[None,self.env.get_output_size()],dtype=tf.float32,name='old_probs')
         self.state = tf.placeholder(shape=self.input_size,dtype=tf.float32,name='state')
         
-        self.outputs = self.build_base_network(self.state,self.env.get_output_size(),'softmax','outputs',Config.l2)
+        self.outputs = self.build_base_network(self.state,self.env.get_output_size(),tf.nn.softmax,'outputs',Config.l2,use_noise=False)
         
 
         self.loss_discrete()
