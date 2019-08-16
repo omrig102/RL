@@ -8,7 +8,7 @@ from critic import Critic
 from actor import Actor
 import cv2
 import matplotlib.pyplot as plt
-import scipy.misc
+from scipy import signal
 #from pyvirtualdisplay import Display
 #display = Display(visible=0, size=(1400, 900))
 #display.start()
@@ -23,7 +23,7 @@ class PPO() :
         self.env = Config.env.clone()
         self.critic = Critic(sess,self.env,'critic')
         self.actor = Actor(sess,self.env,'new_actor')
-        self.old_actor = Actor(sess,self.env,'old_actor')
+        #self.old_actor = Actor(sess,self.env,'old_actor')
         
         #coord = tf.train.Coordinator()
         #threads = tf.train.start_queue_runners(sess=sess, coord=coord)
@@ -32,9 +32,9 @@ class PPO() :
         
         self.critic.init()
         self.actor.init()
-        self.old_actor.init()
+        #self.old_actor.init()
 
-        self.old_actor.copy_trainables(self.actor.scope)
+        #self.old_actor.copy_trainables(self.actor.scope)
         self.timesteps = 0
         
     
@@ -46,23 +46,47 @@ class PPO() :
             os.mkdir(dir)
         elif not os.path.exists(dir):
             os.mkdir(dir)
-        self.old_actor.save(dir,episode)
+        #self.old_actor.save(dir,episode)
         self.actor.save(dir,episode)
         self.critic.save(dir,episode)
     
     def update_networks(self,batch) :
-        states,rewards,mask,actions_probs = batch
+        states,rewards,mask,actions_probs,_ = batch
         
         estimated_rewards = self.critic.predict(states)
         rewards = rewards.reshape([rewards.shape[0],1])
         advantages = rewards - estimated_rewards
-
+        advantages = (advantages - advantages.mean()) / np.maximum(advantages.std(), 1e-6)
+        #advantages = advantages.reshape([advantages.shape[0],1])
+        #rewards = rewards.reshape([rewards.shape[0],1])
         self.actor.train(states,advantages,actions_probs,mask)
 
-        self.old_actor.copy_trainables(self.actor.scope)
+        #self.old_actor.copy_trainables(self.actor.scope)
 
         self.critic.train(states,rewards)
 
+    def discount_cumsum(self,x, discount):
+        return signal.lfilter([1], [1, float(-discount)], x[::-1], axis=0)[::-1]
+
+    def get_discounted_rewards_gae(self,states,rewards,done) :
+        v_states = self.critic.predict(states)
+        v_states = v_states.reshape([v_states.shape[0]])
+        rewards = np.array(rewards)
+        if(done) :
+            last_val = 0
+        else :
+            last_val = v_states[-1]
+        rewards = np.append(rewards,last_val)
+        
+        v_states = np.append(v_states,last_val)
+        
+        # the next two lines implement GAE-Lambda advantage calculation
+        deltas = rewards[:-1] + Config.gamma * v_states[1:] - v_states[:-1]
+        advantages = self.discount_cumsum(deltas, Config.gamma * Config.gae)
+        
+        discounted_rewards = self.discount_cumsum(rewards, Config.gamma)[:-1]
+
+        return discounted_rewards,advantages
 
     def get_discounted_rewards(self,rewards,done):
         for j in range(len(rewards) - 2, -1, -1):
@@ -73,6 +97,7 @@ class PPO() :
 
     def collect_batch(self,state,next_state,total_rewards,episode) :
         states = []
+        batch_advantages = []
         batch_states = []
         rewards = []
         batch_rewards = []
@@ -83,7 +108,7 @@ class PPO() :
             states.append(state) 
 
             if(self.env.is_discrete) :
-                actions_probs = self.old_actor.predict(np.expand_dims(state,axis=0))
+                actions_probs = self.actor.predict(np.expand_dims(state,axis=0))
                 actions_probs = actions_probs.reshape([actions_probs.shape[1]])
                 action = np.random.choice(range(len(actions_probs)),p=actions_probs)
                 current_action = np.zeros(shape=actions_probs.shape)
@@ -92,7 +117,7 @@ class PPO() :
                 mask.append(current_action)
                 batch_actions_probs.append(actions_probs)
             else :
-                action,action_probs = self.old_actor.predict(np.expand_dims(state,axis=0))
+                action,action_probs = self.actor.predict(np.expand_dims(state,axis=0))
                 action = action.reshape([action.shape[1]])
                 action_probs = action_probs.reshape([action_probs.shape[1]])
                 mask.append(action)
@@ -105,14 +130,19 @@ class PPO() :
             
 
             if(done) :
+                #rewards,advantages = self.get_discounted_rewards_gae(states,rewards,True)
                 batch_rewards += self.get_discounted_rewards(rewards,True)
+                #batch_rewards += rewards.tolist()
+                #batch_advantages += advantages.tolist()
                 batch_states += states
                 states = []
                 rewards = []
-                data = 'episode {}/{} \t reward  {}'.format(episode,Config.episodes,total_rewards)
-                print(colored(data,'green'))
-                print(colored('timesteps : {}'.format(self.timesteps),'green'))
-                total_rewards = 0
+                if(episode != 0 and episode % Config.log_episodes == 0) :
+                  average_rewards  = total_rewards / Config.log_episodes
+                  data = 'episode {}/{} \t reward  {}'.format(episode,Config.episodes,average_rewards)
+                  print(colored(data,'green'))
+                  print(colored('timesteps : {}'.format(self.timesteps),'green'))
+                  total_rewards = 0
                 if(episode % Config.save_rate == 0) :
                     self.save(episode)
                 episode += 1
@@ -123,13 +153,16 @@ class PPO() :
         if(len(states) > 0) :
             rewards = self.get_discounted_rewards(rewards,False)
             batch_rewards += rewards
+            #rewards,advantages = self.get_discounted_rewards_gae(states,rewards,False)
+            #batch_rewards += rewards.tolist()
+            #batch_advantages += advantages.tolist()
             if(len(rewards) < len(states)) :
                 states = states[:-1]
                 mask = mask[:-1]
                 batch_actions_probs = batch_actions_probs[:-1]
             batch_states += states
 
-        batch = [np.array(batch_states),np.array(batch_rewards),np.array(mask),np.array(batch_actions_probs)]
+        batch = [np.array(batch_states),np.array(batch_rewards),np.array(mask),np.array(batch_actions_probs),np.array(batch_advantages)]
         if(episode >= Config.episodes) :
             end = True
         else :
