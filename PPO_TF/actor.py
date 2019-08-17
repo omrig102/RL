@@ -55,11 +55,11 @@ class Actor() :
         
         
 
-        mu = self.build_base_network(self.state,self.env.get_output_size(),tf.nn.tanh,l2=Config.l2,use_noise=False)
+        mu_1 = self.build_base_network(self.state,self.env.get_output_size(),tf.nn.tanh,l2=Config.l2,use_noise=False)
         
         high = Config.env.env.action_space.high
         low = Config.env.env.action_space.low
-        #mu = (mu_1 * (high - low) + high + low) / 2
+        mu = (mu_1 * (high - low) + high + low) / 2
         
         #sigma = tf.Variable(tf.random_normal([self.env.get_output_size()], mean=1.0,stddev=0.005))
         #sigma = tf.nn.softplus(sigma) + 1e-3
