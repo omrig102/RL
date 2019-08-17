@@ -5,24 +5,14 @@ import tensorflow as tf
 '''
 def create_mlp_layers(input,hidden_layers,hidden_size,hidden_activation,output_size=None,output_activation=None,output_name=None,use_noise=False,l2=None) :
     x = input
-    if(l2 is None):
-      reg = None
-    else :
-      reg = tf.contrib.layers.l2_regularizer(l2)
     for i in range(hidden_layers) :
-        x = tf.layers.dense(x,units=hidden_size[i],activation=hidden_activation,kernel_regularizer=reg)
+        x = tf.layers.dense(x,units=hidden_size[i],activation=hidden_activation)
 
     if(output_size is not None) :
         if(output_name is None) :
-            if(use_noise) :
-                x = noisy_dense(x,units=output_size,activation=output_activation)
-            else :
-                x = tf.layers.dense(x,units=output_size,activation=output_activation,kernel_regularizer=reg)
+            x = tf.layers.dense(x,units=output_size,activation=output_activation)
         else :
-            if(use_noise) :
-                x = noisy_dense(x,units=output_size,activation=output_activation)
-            else :
-                x = tf.layers.dense(x,units=output_size,activation=output_activation,kernel_regularizer=reg,name=output_name)
+            x = tf.layers.dense(x,units=output_size,activation=output_activation,name=output_name)
     return x
 
 '''
@@ -101,29 +91,3 @@ def create_network_pixels_conv(input,conv_hidden_layers,conv_hidden_size,conv_hi
     x = create_mlp_layers(x,mlp_hidden_layers,mlp_hidden_size,mlp_hidden_activation,output_size,output_activation,output_name,use_noise,l2)
 
     return x
-
-
-
-def noisy_dense(inputs, units, w_i=tf.glorot_uniform_initializer,use_bias=True, b_i=tf.zeros_initializer, activation=tf.nn.relu, noisy_distribution='factorised'):
-    def f(e_list):
-        return tf.multiply(tf.sign(e_list), tf.pow(tf.abs(e_list), 0.5))
-    
-    flatten_shape = inputs.get_shape().as_list()[1]
-    weights = tf.Variable(w_i()(shape=[flatten_shape, units]))
-    w_noise = tf.Variable(w_i()([flatten_shape, units]))
-    if(noisy_distribution == 'independent'):
-        weights += tf.multiply(tf.random_normal(shape=w_noise.shape), w_noise)
-    elif(noisy_distribution == 'factorised'):
-        noise_1 = f(tf.random_normal(tf.TensorShape([flatten_shape, 1]), dtype=tf.float32))
-        noise_2 = f(tf.random_normal(tf.TensorShape([1, units]), dtype=tf.float32))
-        weights += tf.multiply(noise_1 * noise_2, w_noise)
-    dense = tf.matmul(inputs, weights)
-    if(use_bias):
-        biases = tf.Variable(b_i()(shape=[1,units]))
-        b_noise = tf.Variable(b_i()([1, units]))
-        if(noisy_distribution == 'independent'):
-            biases += tf.multiply(tf.random_normal(shape=b_noise.shape), b_noise)
-        elif(noisy_distribution == 'factorised'):
-            biases += tf.multiply(noise_2, b_noise)
-        return activation(dense + biases) if activation is not None else dense + biases
-    return activation(dense) if activation is not None else dense

@@ -9,18 +9,20 @@ class Config() :
     #game = 'SuperMarioBros-v0'
     game = 'BipedalWalkerHardcore-v2'
     root_dir = '.'
-    episodes = 100000
+    episodes = 1000000
     start_episode = 0
+    log_episodes = 100
     batch_size = 1024
     buffer_size = 4096
     epochs = 10
     epsilon=0.2
     entropy = 0.1
     gamma = 0.99
+    gae = 0.98
     l2 = None
     reward_scaler = 'positive'
-    save_rate = 10
-    critic_learning_rate = 0.001
+    save_rate = 1000
+    critic_learning_rate = 0.0001
     actor_learning_rate = 0.0001
     sigma_limit = None
     use_shuffle = True
@@ -30,8 +32,8 @@ class Config() :
         resized_width = 84
     network_type = 'mlp'
     #mlp
-    mlp_hidden_layers = 2
-    mlp_hidden_units = [128,128]
+    mlp_hidden_layers = 3
+    mlp_hidden_units = [128,128,128]
     #lstm
     if(network_type == 'lstm') :
         lstm_layers = 1

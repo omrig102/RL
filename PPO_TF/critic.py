@@ -44,6 +44,22 @@ class Critic() :
     def save(self,dir,episode) :
         self.saver.save(self.sess,dir + '/critic/model.ckpt',global_step=episode)
 
+    def clip_gradients_global_norm(self, loss, clip_factor, step):
+        optimizer = tf.train.AdamOptimizer(learning_rate=step)
+        gradients, variables = zip(*optimizer.compute_gradients(loss))
+        filtered_grads = []
+        filtered_vars = []
+        for i in range(len(gradients)):
+            if gradients[i] is not None:
+                filtered_grads.append(gradients[i])
+                filtered_vars.append(variables[i])
+        gradients = filtered_grads
+        variables = filtered_vars
+        gradients, _ = tf.clip_by_global_norm(gradients, clip_factor) 
+        grad_norm = tf.reduce_sum([tf.norm(grad) for grad in gradients])
+        train_op = optimizer.apply_gradients(zip(gradients, variables))
+        return train_op
+
     def build_critic_network(self) :
 
         self.state = tf.placeholder(shape=self.input_size,dtype=tf.float32,name='state')
@@ -52,8 +68,10 @@ class Critic() :
         self.outputs = self.build_base_network(self.state,1,None,'outputs',use_noise=False)
 
         loss = tf.losses.mean_squared_error(labels=self.reward,predictions=self.outputs)
-        optimizer_train = tf.train.AdamOptimizer(learning_rate=Config.critic_learning_rate)
-        self.optimizer = optimizer_train.minimize(loss)
+        #optimizer_train = tf.train.AdamOptimizer(learning_rate=Config.critic_learning_rate)
+        #optimizer_train = tf.contrib.estimator.clip_gradients_by_norm(optimizer_train, clip_norm=10.0)
+        #self.optimizer = optimizer_train.minimize(loss)
+        self.optimizer = self.clip_gradients_global_norm(loss,10.0,Config.critic_learning_rate)
 
     def build_base_network(self,x,output_size,output_activation,output_name=None,l2=None,use_noise=False) :
         if(Config.use_pixels) :
@@ -77,9 +95,10 @@ class Critic() :
     def train(self,states,rewards) :
         randomize = np.arange(len(states))
         for _ in range(Config.epochs) :
+            if(Config.use_shuffle and Config.network_type != 'lstm') :
+                np.random.shuffle(randomize)
             for index in range(int(Config.buffer_size/Config.batch_size)) :
-                if(Config.use_shuffle and Config.network_type != 'lstm') :
-                    np.random.shuffle(randomize)
+                
                 batch_states,batch_rewards = self.prepare_batch(states,rewards,index,randomize)
                 self.sess.run(self.optimizer,feed_dict={self.state:batch_states,self.reward:batch_rewards})
         
