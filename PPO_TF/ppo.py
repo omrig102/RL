@@ -23,18 +23,11 @@ class PPO() :
         self.env = Config.env.clone()
         self.critic = Critic(sess,self.env,'critic')
         self.actor = Actor(sess,self.env,'new_actor')
-        #self.old_actor = Actor(sess,self.env,'old_actor')
-        
-        #coord = tf.train.Coordinator()
-        #threads = tf.train.start_queue_runners(sess=sess, coord=coord)
         init = tf.global_variables_initializer()
         sess.run(init)
         
         self.critic.init()
         self.actor.init()
-        #self.old_actor.init()
-
-        #self.old_actor.copy_trainables(self.actor.scope)
         self.timesteps = 0
         
     
@@ -46,7 +39,6 @@ class PPO() :
             os.mkdir(dir)
         elif not os.path.exists(dir):
             os.mkdir(dir)
-        #self.old_actor.save(dir,episode)
         self.actor.save(dir,episode)
         self.critic.save(dir,episode)
     
@@ -57,36 +49,11 @@ class PPO() :
         rewards = rewards.reshape([rewards.shape[0],1])
         advantages = rewards - estimated_rewards
         advantages = (advantages - advantages.mean()) / np.maximum(advantages.std(), 1e-6)
-        #advantages = advantages.reshape([advantages.shape[0],1])
-        #rewards = rewards.reshape([rewards.shape[0],1])
+
         self.actor.train(states,advantages,actions_probs,mask)
 
-        #self.old_actor.copy_trainables(self.actor.scope)
 
         self.critic.train(states,rewards)
-
-    def discount_cumsum(self,x, discount):
-        return signal.lfilter([1], [1, float(-discount)], x[::-1], axis=0)[::-1]
-
-    def get_discounted_rewards_gae(self,states,rewards,done) :
-        v_states = self.critic.predict(states)
-        v_states = v_states.reshape([v_states.shape[0]])
-        rewards = np.array(rewards)
-        if(done) :
-            last_val = 0
-        else :
-            last_val = v_states[-1]
-        rewards = np.append(rewards,last_val)
-        
-        v_states = np.append(v_states,last_val)
-        
-        # the next two lines implement GAE-Lambda advantage calculation
-        deltas = rewards[:-1] + Config.gamma * v_states[1:] - v_states[:-1]
-        advantages = self.discount_cumsum(deltas, Config.gamma * Config.gae)
-        
-        discounted_rewards = self.discount_cumsum(rewards, Config.gamma)[:-1]
-
-        return discounted_rewards,advantages
 
     def get_discounted_rewards(self,rewards,done):
         for j in range(len(rewards) - 2, -1, -1):
@@ -130,10 +97,7 @@ class PPO() :
             
 
             if(done) :
-                #rewards,advantages = self.get_discounted_rewards_gae(states,rewards,True)
                 batch_rewards += self.get_discounted_rewards(rewards,True)
-                #batch_rewards += rewards.tolist()
-                #batch_advantages += advantages.tolist()
                 batch_states += states
                 states = []
                 rewards = []
@@ -153,9 +117,6 @@ class PPO() :
         if(len(states) > 0) :
             rewards = self.get_discounted_rewards(rewards,False)
             batch_rewards += rewards
-            #rewards,advantages = self.get_discounted_rewards_gae(states,rewards,False)
-            #batch_rewards += rewards.tolist()
-            #batch_advantages += advantages.tolist()
             if(len(rewards) < len(states)) :
                 states = states[:-1]
                 mask = mask[:-1]
@@ -170,6 +131,8 @@ class PPO() :
         return batch,end,episode,total_rewards,state,next_state
 
     def reward_scaler(self,reward) :
+        if(Config.reward_scaler is None) :
+            return reward
         if(Config.reward_scaler == 'positive') :
             return max(-0.001, reward / 100.0)
         if(Config.reward_scaler == 'scale') :

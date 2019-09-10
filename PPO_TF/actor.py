@@ -55,14 +55,11 @@ class Actor() :
         
         
 
-        mu_1 = self.build_base_network(self.state,self.env.get_output_size(),tf.nn.tanh,l2=Config.l2,use_noise=False)
+        mu = self.build_base_network(self.state,self.env.get_output_size(),tf.nn.tanh)
         
         high = Config.env.env.action_space.high
         low = Config.env.env.action_space.low
-        mu = (mu_1 * (high - low) + high + low) / 2
         
-        #sigma = tf.Variable(tf.random_normal([self.env.get_output_size()], mean=1.0,stddev=0.005))
-        #sigma = tf.nn.softplus(sigma) + 1e-3
         log_sigma = tf.Variable(-0.5 * np.ones(self.env.get_output_size(), dtype=np.float32))
         sigma = tf.exp(log_sigma)
 
@@ -70,53 +67,32 @@ class Actor() :
         self.action = tf.clip_by_value(dist.sample(),low,high,name='action')
         self.probs = dist.prob(self.chosen_action,name='probs')
 
-        self.loss_continuous(high,low,mu,sigma)
+        self.loss_continuous()
 
-    def build_base_network(self,x,output_size,output_activation,output_name=None,l2=None,use_noise=False) :
+    def build_base_network(self,x,output_size,output_activation,output_name=None) :
         if(Config.use_pixels) :
             if(Config.network_type == 'mlp') :
-                return models.create_network_pixels_mlp(x,Config.mlp_hidden_layers,Config.mlp_hidden_units,tf.nn.tanh,output_size,output_activation,output_name,use_noise,l2)
+                return models.create_network_pixels_mlp(x,Config.mlp_hidden_layers,Config.mlp_hidden_units,tf.nn.tanh,output_size,output_activation,output_name)
             elif(Config.network_type == 'conv2d') :
-                return models.create_network_pixels_conv(x,Config.conv_layers,Config.conv_units,tf.nn.relu,Config.mlp_hidden_layers,Config.mlp_hidden_units,tf.nn.tanh,output_size,output_activation,output_name,use_noise,l2)
+                return models.create_network_pixels_conv(x,Config.conv_layers,Config.conv_units,tf.nn.relu,Config.mlp_hidden_layers,Config.mlp_hidden_units,tf.nn.tanh,output_size,output_activation,output_name)
             elif(Config.network_type == 'lstm')  :
-                return models.create_network_lstm(x,Config.lstm_layers,Config.lstm_units,Config.unit_type,Config.mlp_hidden_layers,Config.mlp_hidden_units,tf.nn.tanh,output_size,output_activation,output_name,use_noise,l2)
+                return models.create_network_lstm(x,Config.lstm_layers,Config.lstm_units,Config.unit_type,Config.mlp_hidden_layers,Config.mlp_hidden_units,tf.nn.tanh,output_size,output_activation,output_name)
         elif(Config.network_type == 'mlp') :
-            return models.create_mlp_network(x,Config.mlp_hidden_layers,Config.mlp_hidden_units,tf.nn.tanh,output_size,output_activation,output_name,use_noise,l2)
+            return models.create_mlp_network(x,Config.mlp_hidden_layers,Config.mlp_hidden_units,tf.nn.tanh,output_size,output_activation,output_name)
         elif(Config.network_type == 'lstm') :
-            return models.create_network_lstm(x,Config.lstm_layers,Config.lstm_units,Config.unit_type,Config.mlp_hidden_layers,Config.mlp_hidden_units,tf.nn.tanh,output_size,output_activation,output_name,use_noise,l2)
+            return models.create_network_lstm(x,Config.lstm_layers,Config.lstm_units,Config.unit_type,Config.mlp_hidden_layers,Config.mlp_hidden_units,tf.nn.tanh,output_size,output_activation,output_name)
         else :
             raise Exception('Unable to create base network,check config')
 
-    def clip_gradients_global_norm(self, loss, clip_factor, step):
-        optimizer = tf.train.AdamOptimizer(learning_rate=step)
-        gradients, variables = zip(*optimizer.compute_gradients(loss))
-        filtered_grads = []
-        filtered_vars = []
-        for i in range(len(gradients)):
-            if gradients[i] is not None:
-                filtered_grads.append(gradients[i])
-                filtered_vars.append(variables[i])
-        gradients = filtered_grads
-        variables = filtered_vars
-        gradients, _ = tf.clip_by_global_norm(gradients, clip_factor) 
-        grad_norm = tf.reduce_sum([tf.norm(grad) for grad in gradients])
-        train_op = optimizer.apply_gradients(zip(gradients, variables))
-        return train_op
 
-    def loss_continuous(self,high,low,mu,sigma) :
-        #hi_mu_loss = tf.square(tf.maximum(0.0, mu - high * 1.1))
-        #lo_mu_loss = tf.square(tf.maximum(0.0, low * 1.1 - mu))
-        #scale_diff = high - low
-        #sigma_bound = tf.square(tf.maximum(0.0, sigma - scale_diff * 2.0))
-        #penalty_loss = tf.reduce_sum(hi_mu_loss + lo_mu_loss + sigma_bound, axis=1)
+
+    def loss_continuous(self) :
         ratio = self.probs / tf.maximum(1e-10,self.old_probs)
         unclipped = ratio * self.advantage
         clipped = tf.clip_by_value(ratio,1-Config.epsilon,1+Config.epsilon) * self.advantage
-        loss = -tf.reduce_mean(tf.minimum(unclipped,clipped)) #+tf.reduce_mean(penalty_loss)
-        self.optimizer = self.clip_gradients_global_norm(loss,10.0,Config.actor_learning_rate)
-        #optimizer = tf.train.AdamOptimizer(learning_rate=Config.actor_learning_rate)
-        #optimizer = tf.contrib.estimator.clip_gradients_by_norm(optimizer, clip_norm=10.0)
-        #self.optimizer = optimizer.minimize(loss)
+        loss = -tf.reduce_mean(tf.minimum(unclipped,clipped))
+        optimizer = tf.train.AdamOptimizer(learning_rate=Config.actor_learning_rate)
+        self.optimizer = optimizer.minimize(loss)
 
     def loss_discrete(self) :
         prob = tf.log(self.mask * self.outputs + 1e-10)
@@ -153,13 +129,11 @@ class Actor() :
 
         randomize = np.arange(len(states))
         for _ in range(Config.epochs) :
-            #self.sess.run(iterator.initializer)
             if(Config.use_shuffle and Config.network_type != 'lstm') :
                 np.random.shuffle(randomize)
             for index in range(int(Config.buffer_size/Config.batch_size)) :
                 
                 batch_states,batch_advantages,batch_old_probs,batch_masks = self.prepare_batch(states,advantages,old_probs,masks,index,randomize)
-                #batch_states,batch_advantages,batch_old_probs,batch_masks = self.sess.run(batch)
                 if(self.env.is_discrete) :
                     self.__train_discrete(batch_states,batch_advantages,batch_old_probs,batch_masks)
                 else :

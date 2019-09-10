@@ -11,20 +11,20 @@ class Config() :
     root_dir = '.'
     episodes = 1000000
     start_episode = 0
+    save_video = True
+    save_video_interval = 50
+    save_rate = 1000
     log_episodes = 100
     batch_size = 1024
     buffer_size = 4096
     epochs = 10
-    epsilon=0.2
+    epsilon=0.05
     entropy = 0.1
     gamma = 0.99
-    gae = 0.98
-    l2 = None
     reward_scaler = 'positive'
-    save_rate = 1000
+    
     critic_learning_rate = 0.0001
     actor_learning_rate = 0.0001
-    sigma_limit = None
     use_shuffle = True
     use_pixels = False
     if(use_pixels) :
@@ -46,8 +46,7 @@ class Config() :
         conv_units = [32,64,64]
         stack_size = 4
         
-    save_video = True
-    save_video_interval = 50
+    
     #env = MarioEnvironment(game,save_video=save_video,save_video_interval=save_video_interval)
     #env = RetroEnvironment(game,save_video=save_video,save_video_interval=save_video_interval)
     env = GymEnvironment(game,save_video=save_video,save_video_interval=save_video_interval)
