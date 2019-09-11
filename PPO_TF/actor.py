@@ -90,7 +90,7 @@ class Actor() :
         ratio = self.probs / tf.maximum(1e-10,self.old_probs)
         unclipped = ratio * self.advantage
         clipped = tf.clip_by_value(ratio,1-Config.epsilon,1+Config.epsilon) * self.advantage
-        loss = -tf.reduce_mean(tf.minimum(unclipped,clipped))
+        loss = -tf.reduce_mean(tf.minimum(unclipped,clipped) + Config.entropy * -(self.probs * tf.log(self.probs + 1e-10)))
         optimizer = tf.train.AdamOptimizer(learning_rate=Config.actor_learning_rate)
         self.optimizer = optimizer.minimize(loss)
 
