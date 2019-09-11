@@ -43,8 +43,14 @@ class Critic() :
     def save(self,dir,episode) :
         self.saver.save(self.sess,dir + '/critic/model.ckpt',global_step=episode)
 
-    def build_critic_network(self) :
+    def clip_by_global_norm(self,loss,optimizer,clip) :
+        gradients, variables = zip(*optimizer.compute_gradients(loss))
+        gradients, _ = tf.clip_by_global_norm(gradients, clip)
+        optimize = optimizer.apply_gradients(zip(gradients, variables))
+        return optimize
 
+
+    def build_critic_network(self) :
         self.state = tf.placeholder(shape=self.input_size,dtype=tf.float32,name='state')
         self.reward = tf.placeholder(shape=[None,1],dtype=tf.float32,name='reward')
 
@@ -52,7 +58,7 @@ class Critic() :
 
         loss = tf.losses.mean_squared_error(labels=self.reward,predictions=self.outputs)
         optimizer_train = tf.train.AdamOptimizer(learning_rate=Config.critic_learning_rate)
-        self.optimizer = optimizer_train.minimize(loss)
+        self.optimizer = self.clip_by_global_norm(loss,optimizer_train,Config.gradient_clip)
 
     def build_base_network(self,x,output_size,output_activation,output_name=None) :
         if(Config.use_pixels) :

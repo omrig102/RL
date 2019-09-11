@@ -29,6 +29,7 @@ class PPO() :
         self.critic.init()
         self.actor.init()
         self.timesteps = 0
+        self.epsilon_decay_step = (Config.epsilon - Config.min_epsilon) / Config.episodes
         
     
 
@@ -41,19 +42,20 @@ class PPO() :
             os.mkdir(dir)
         self.actor.save(dir,episode)
         self.critic.save(dir,episode)
-    
+
     def update_networks(self,batch) :
         states,rewards,mask,actions_probs,_ = batch
         
         estimated_rewards = self.critic.predict(states)
         rewards = rewards.reshape([rewards.shape[0],1])
         advantages = rewards - estimated_rewards
-        advantages = (advantages - advantages.mean()) / np.maximum(advantages.std(), 1e-6)
+        advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-6)
 
         self.actor.train(states,advantages,actions_probs,mask)
 
 
         self.critic.train(states,rewards)
+        Config.epsilon -= self.epsilon_decay_step
 
     def get_discounted_rewards(self,rewards,done):
         for j in range(len(rewards) - 2, -1, -1):

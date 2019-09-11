@@ -48,6 +48,7 @@ class Actor() :
             self.build_actor_network_continuous()
 
     def build_actor_network_continuous(self) :
+        self.epsilon = tf.placeholder(shape=[None,self.env.get_output_size()],dtype=tf.float32)
         self.advantage = tf.placeholder(shape=[None,1],dtype=tf.float32,name='advantage')
         self.old_probs = tf.placeholder(shape=[None,self.env.get_output_size()],dtype=tf.float32,name='old_prob')
         self.state = tf.placeholder(shape=self.input_size,dtype=tf.float32,name='state')
@@ -84,33 +85,38 @@ class Actor() :
         else :
             raise Exception('Unable to create base network,check config')
 
-
+    def clip_by_global_norm(self,loss,optimizer,clip) :
+        gradients, variables = zip(*optimizer.compute_gradients(loss))
+        gradients, _ = tf.clip_by_global_norm(gradients, clip)
+        optimize = optimizer.apply_gradients(zip(gradients, variables))
+        return optimize
 
     def loss_continuous(self) :
         ratio = self.probs / tf.maximum(1e-10,self.old_probs)
         unclipped = ratio * self.advantage
-        clipped = tf.clip_by_value(ratio,1-Config.epsilon,1+Config.epsilon) * self.advantage
+        clipped = tf.clip_by_value(ratio,1-self.epsilon,1+self.epsilon) * self.advantage
         loss = -tf.reduce_mean(tf.minimum(unclipped,clipped) + Config.entropy * -(self.probs * tf.log(self.probs + 1e-10)))
         optimizer = tf.train.AdamOptimizer(learning_rate=Config.actor_learning_rate)
-        self.optimizer = optimizer.minimize(loss)
+        self.optimizer = self.clip_by_global_norm(loss,optimizer,Config.gradient_clip)
 
     def loss_discrete(self) :
         prob = tf.log(self.mask * self.outputs + 1e-10)
         old_prob = tf.log(self.mask * self.old_probs + 1e-10)
         ratio = tf.exp(prob - old_prob)
         unclipped = ratio * self.advantage
-        clipped = tf.clip_by_value(ratio,1-Config.epsilon,1+Config.epsilon) * self.advantage
+        clipped = tf.clip_by_value(ratio,1-self.epsilon,1+self.epsilon) * self.advantage
         loss = -tf.reduce_mean(tf.minimum(unclipped,clipped) + Config.entropy * -(self.mask * self.outputs * prob))
         optimizer = tf.train.AdamOptimizer(learning_rate=Config.actor_learning_rate)
-        self.optimizer = optimizer.minimize(loss)
+        self.optimizer = self.clip_by_global_norm(loss,optimizer,Config.gradient_clip)
 
     def build_actor_network_discrete(self) :
+        self.epsilon = tf.placeholder(shape=[None,self.env.get_output_size()],dtype=tf.float32)
         self.mask = tf.placeholder(shape=[None,self.env.get_output_size()],dtype=tf.float32,name='mask')
         self.advantage = tf.placeholder(shape=[None,1],dtype=tf.float32,name='advantage')
         self.old_probs = tf.placeholder(shape=[None,self.env.get_output_size()],dtype=tf.float32,name='old_probs')
         self.state = tf.placeholder(shape=self.input_size,dtype=tf.float32,name='state')
         
-        self.outputs = self.build_base_network(self.state,self.env.get_output_size(),tf.nn.softmax,'outputs',Config.l2,use_noise=False)
+        self.outputs = self.build_base_network(self.state,self.env.get_output_size(),tf.nn.softmax,'outputs')
         
 
         self.loss_discrete()
@@ -124,6 +130,9 @@ class Actor() :
             #action = action[0]
             action_probs = self.sess.run(self.probs,feed_dict={self.state:state,self.chosen_action:action})
             return action,action_probs
+
+    def generate_epsilon(self,shape) :
+        return np.full(shape=shape,fill_value=Config.epsilon)
 
     def train(self,states,advantages,old_probs,masks) :
 
@@ -140,11 +149,11 @@ class Actor() :
                     self.__train_continuous(batch_states,batch_advantages,batch_old_probs,batch_masks)
 
     def __train_discrete(self,batch_states,batch_advantages,batch_old_probs,batch_masks) :
-        self.sess.run(self.optimizer,feed_dict={self.state:batch_states,self.advantage:batch_advantages
+        self.sess.run(self.optimizer,feed_dict={self.epsilon:self.generate_epsilon(batch_old_probs.shape),self.state:batch_states,self.advantage:batch_advantages
                     ,self.old_probs:batch_old_probs,self.mask:batch_masks})
 
     def __train_continuous(self,batch_states,batch_advantages,batch_old_probs,batch_actions) :
-        self.sess.run(self.optimizer,feed_dict={self.state:batch_states,self.advantage:batch_advantages
+        self.sess.run(self.optimizer,feed_dict={self.epsilon:self.generate_epsilon(batch_old_probs.shape),self.state:batch_states,self.advantage:batch_advantages
                     ,self.old_probs:batch_old_probs,self.chosen_action:batch_actions})
 
     def copy_trainables(self,actor_scope) :

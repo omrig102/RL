@@ -8,18 +8,20 @@ class Config() :
 
     #game = 'SuperMarioBros-v0'
     game = 'BipedalWalkerHardcore-v2'
-    root_dir = '.'
-    episodes = 1000000
+    root_dir = '/content/gdrive/My Drive/PPO'
+    episodes = 10000000
     start_episode = 0
     save_video = True
-    save_video_interval = 50
-    save_rate = 1000
+    save_video_interval = 100
+    save_rate = 100
     log_episodes = 100
     batch_size = 1024
     buffer_size = 4096
     epochs = 10
-    epsilon=0.05
-    entropy = 0.1
+    gradient_clip = 10
+    epsilon=0.2
+    min_epsilon = 0.1
+    entropy = 0.01
     gamma = 0.99
     reward_scaler = 'positive'
     
@@ -45,7 +47,6 @@ class Config() :
         conv_layers = 3
         conv_units = [32,64,64]
         stack_size = 4
-        
     
     #env = MarioEnvironment(game,save_video=save_video,save_video_interval=save_video_interval)
     #env = RetroEnvironment(game,save_video=save_video,save_video_interval=save_video_interval)
@@ -69,14 +70,14 @@ class Config() :
             cls.batch_size = config.batch_size
             cls.buffer_size = config.buffer_size
             cls.epochs = config.epochs
+            cls.gradient_clip = config.gradient_clip
             cls.epsilon=config.epsilon
+            cls.min_epsilon = config.min_epsilon
             cls.entropy = config.entropy
             cls.gamma = config.gamma
-            cls.l2 = config.l2
             cls.save_rate = config.save_rate
             cls.critic_learning_rate = config.critic_learning_rate
             cls.actor_learning_rate = config.actor_learning_rate
-            cls.sigma_limit = config.sigma_limit
             cls.use_shuffle = config.use_shuffle
             cls.use_pixels = config.use_pixels
             if(cls.use_pixels) :
