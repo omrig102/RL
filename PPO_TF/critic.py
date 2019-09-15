@@ -53,10 +53,19 @@ class Critic() :
     def build_critic_network(self) :
         self.state = tf.placeholder(shape=self.input_size,dtype=tf.float32,name='state')
         self.reward = tf.placeholder(shape=[None,1],dtype=tf.float32,name='reward')
+        self.old_preds = tf.placeholder(shape=[None,1],dtype=tf.float32,name='old_preds')
+        self.epsilon = tf.placeholder(shape=[None,1],dtype=tf.float32)
 
         self.outputs = self.build_base_network(self.state,1,None,'outputs')
 
-        loss = tf.losses.mean_squared_error(labels=self.reward,predictions=self.outputs)
+        clipped = self.old_preds + tf.clip_by_value(self.outputs - self.old_preds, - self.epsilon, self.epsilon)
+        loss_unclipped = tf.square(self.outputs - self.reward)
+        loss_clipped = tf.square(clipped - self.reward)
+        
+        loss = 0.5 * tf.reduce_mean(tf.maximum(loss_unclipped, loss_clipped))
+        
+        
+        #loss = tf.losses.mean_squared_error(labels=self.reward,predictions=self.outputs)
         optimizer_train = tf.train.AdamOptimizer(learning_rate=Config.critic_learning_rate)
         self.optimizer = self.clip_by_global_norm(loss,optimizer_train,Config.gradient_clip)
 
@@ -65,7 +74,7 @@ class Critic() :
             if(Config.network_type == 'mlp') :
                 return models.create_network_pixels_mlp(x,Config.mlp_hidden_layers,Config.mlp_hidden_units,tf.nn.tanh,output_size,output_activation,output_name)
             elif(Config.network_type == 'conv2d') :
-                return models.create_network_pixels_conv(x,Config.conv_layers,Config.conv_units,tf.nn.relu,Config.mlp_hidden_layers,Config.mlp_hidden_units,tf.nn.tanh,output_size,output_activation,output_name)
+                return models.create_network_pixels_conv(x,Config.conv_layers,Config.conv_units,Config.kernel_size,Config.strides,tf.nn.relu,Config.mlp_hidden_layers,Config.mlp_hidden_units,tf.nn.relu,output_size,output_activation,output_name)
             elif(Config.network_type == 'lstm')  :
                 return models.create_network_lstm(x,Config.lstm_layers,Config.lstm_units,Config.unit_type,Config.mlp_hidden_layers,Config.mlp_hidden_units,tf.nn.tanh,output_size,output_activation,output_name)
         elif(Config.network_type == 'mlp') :
@@ -78,24 +87,30 @@ class Critic() :
 
     def predict(self,state) :
         return self.sess.run(self.outputs,feed_dict={self.state:state})
+      
+      
+    def generate_epsilon(self,shape) :
+        return np.full(shape=shape,fill_value=Config.epsilon)      
 
-    def train(self,states,rewards) :
+    def train(self,states,rewards,old_preds) :
         randomize = np.arange(len(states))
         for _ in range(Config.epochs) :
             if(Config.use_shuffle and Config.network_type != 'lstm') :
                 np.random.shuffle(randomize)
             for index in range(int(Config.buffer_size/Config.batch_size)) :
                 
-                batch_states,batch_rewards = self.prepare_batch(states,rewards,index,randomize)
-                self.sess.run(self.optimizer,feed_dict={self.state:batch_states,self.reward:batch_rewards})
+                batch_states,batch_rewards,batch_old_preds = self.prepare_batch(states,rewards,old_preds,index,randomize)
+                self.sess.run(self.optimizer,feed_dict={self.epsilon:self.generate_epsilon([batch_states.shape[0],1]),self.state:batch_states,self.reward:batch_rewards,self.old_preds : batch_old_preds})
         
 
-    def prepare_batch(self,states,values,current_batch,randomized) :
+    def prepare_batch(self,states,values,old_preds,current_batch,randomized) :
         random_states = states[randomized].copy()
         random_values = values[randomized].copy()
+        random_old_preds = old_preds[randomized].copy()
         
         current_index = int(current_batch * Config.batch_size)
         batch_states = random_states[current_index : current_index + Config.batch_size]
         batch_values = random_values[current_index : current_index + Config.batch_size]
+        batch_old_preds = random_old_preds[current_index : current_index + Config.batch_size]
 
-        return batch_states,batch_values
+        return batch_states,batch_values,batch_old_preds

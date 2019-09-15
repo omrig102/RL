@@ -6,6 +6,7 @@ import os
 import tensorflow as tf
 from critic import Critic
 from actor import Actor
+from actor_critic import ActorCritic
 import cv2
 import matplotlib.pyplot as plt
 from scipy import signal
@@ -21,13 +22,19 @@ class PPO() :
         if(Config.start_episode > 0) :
             Config.load()
         self.env = Config.env.clone()
-        self.critic = Critic(sess,self.env,'critic')
-        self.actor = Actor(sess,self.env,'new_actor')
+        if(Config.policy_type == 'actor_critic') :
+            self.actor_critic = ActorCritic(sess,self.env,'actor_critic')
+        else :
+            self.critic = Critic(sess,self.env,'critic')
+            self.actor = Actor(sess,self.env,'new_actor')
         init = tf.global_variables_initializer()
         sess.run(init)
         
-        self.critic.init()
-        self.actor.init()
+        if(Config.policy_type == 'actor_critic') :
+            self.actor_critic.init()
+        else :
+            self.critic.init()
+            self.actor.init()
         self.timesteps = 0
         self.epsilon_decay_step = (Config.epsilon - Config.min_epsilon) / Config.episodes
         
@@ -40,22 +47,62 @@ class PPO() :
             os.mkdir(dir)
         elif not os.path.exists(dir):
             os.mkdir(dir)
-        self.actor.save(dir,episode)
-        self.critic.save(dir,episode)
+        if(Config.policy_type == 'actor_critic') :
+            self.actor_critic.save(dir,episode)
+        else :
+            self.actor.save(dir,episode)
+            self.critic.save(dir,episode)
 
     def update_networks(self,batch) :
-        states,rewards,mask,actions_probs,_ = batch
+        states,rewards,mask,actions_probs,advantages = batch
         
-        estimated_rewards = self.critic.predict(states)
+        if(Config.policy_type == 'actor_critic') :
+             estimated_rewards = self.actor_critic.predict_value(states)
+        else :
+            estimated_rewards = self.critic.predict(states)
+        #rewards = rewards.reshape([rewards.shape[0],1])
+        #advantages = rewards - estimated_rewards
+        #advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-6)
+        advantages = advantages.reshape([advantages.shape[0],1])
         rewards = rewards.reshape([rewards.shape[0],1])
-        advantages = rewards - estimated_rewards
-        advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-6)
 
-        self.actor.train(states,advantages,actions_probs,mask)
-
-
-        self.critic.train(states,rewards)
+        if(Config.policy_type == 'actor_critic') :
+            self.actor_critic.train(states,advantages,actions_probs,mask,rewards,estimated_rewards)
+        else :
+            self.actor.train(states,advantages,actions_probs,mask)
+            self.critic.train(states,rewards,estimated_rewards)
+        
         Config.epsilon -= self.epsilon_decay_step
+
+    def discount_cumsum(self,x, discount):
+        return signal.lfilter([1], [1, float(-discount)], x[::-1], axis=0)[::-1]
+
+    def get_discounted_rewards_gae(self,states,rewards,done) :
+        if(Config.policy_type == 'actor_critic') :
+            v_states = self.actor_critic.predict_value(states)
+        else :
+            v_states = self.critic.predict(states)
+        advantages = np.zeros_like(rewards)
+        v_states = v_states.reshape([v_states.shape[0]])
+        rewards = np.array(rewards)
+        lastgaelam = 0
+        for t in reversed(range(len(rewards))):
+            if t == len(rewards) - 1:
+                if(done) :
+                    nextnonterminal = 0.0
+                else :
+                    nextnonterminal = 1.0
+                nextvalues = 0
+            else:
+                nextnonterminal = 1.0
+                nextvalues = v_states[t+1]
+            delta = rewards[t] + Config.gamma * nextvalues * nextnonterminal - v_states[t]
+            advantages[t] = lastgaelam = delta + Config.gamma * Config.gae * nextnonterminal * lastgaelam
+        
+        values = np.asarray(rewards, dtype=np.float32)
+        discounted_rewards = advantages + values
+
+        return discounted_rewards,advantages
 
     def get_discounted_rewards(self,rewards,done):
         for j in range(len(rewards) - 2, -1, -1):
@@ -77,7 +124,10 @@ class PPO() :
             states.append(state) 
 
             if(self.env.is_discrete) :
-                actions_probs = self.actor.predict(np.expand_dims(state,axis=0))
+                if(Config.policy_type == 'actor_critic') :
+                    actions_probs = self.actor_critic.predict_action(np.expand_dims(state,axis=0))
+                else :
+                    actions_probs = self.actor.predict(np.expand_dims(state,axis=0))
                 actions_probs = actions_probs.reshape([actions_probs.shape[1]])
                 action = np.random.choice(range(len(actions_probs)),p=actions_probs)
                 current_action = np.zeros(shape=actions_probs.shape)
@@ -99,7 +149,10 @@ class PPO() :
             
 
             if(done) :
-                batch_rewards += self.get_discounted_rewards(rewards,True)
+                rewards,advantages = self.get_discounted_rewards_gae(states,rewards,True)
+                batch_rewards += rewards.tolist()
+                batch_advantages += advantages.tolist()
+                #batch_rewards += self.get_discounted_rewards(rewards,True)
                 batch_states += states
                 states = []
                 rewards = []
@@ -117,8 +170,11 @@ class PPO() :
             self.timesteps += 1
 
         if(len(states) > 0) :
-            rewards = self.get_discounted_rewards(rewards,False)
-            batch_rewards += rewards
+            #rewards = self.get_discounted_rewards(rewards,False)
+            #batch_rewards += rewards
+            rewards,advantages = self.get_discounted_rewards_gae(states,rewards,False)
+            batch_rewards += rewards.tolist()
+            batch_advantages += advantages.tolist()
             if(len(rewards) < len(states)) :
                 states = states[:-1]
                 mask = mask[:-1]
@@ -135,6 +191,8 @@ class PPO() :
     def reward_scaler(self,reward) :
         if(Config.reward_scaler is None) :
             return reward
+        if(Config.reward_scaler == 'sign') :
+            return np.sign(reward)
         if(Config.reward_scaler == 'positive') :
             return max(-0.001, reward / 100.0)
         if(Config.reward_scaler == 'scale') :

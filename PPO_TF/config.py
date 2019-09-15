@@ -7,35 +7,37 @@ import pickle
 class Config() :
 
     #game = 'SuperMarioBros-v0'
-    game = 'BipedalWalkerHardcore-v2'
-    root_dir = '/content/gdrive/My Drive/PPO'
+    game = 'PongNoFrameskip-v4'
+    root_dir = '.'
     episodes = 10000000
-    start_episode = 0
+    start_episode = 100
     save_video = True
-    save_video_interval = 100
-    save_rate = 100
-    log_episodes = 100
-    batch_size = 1024
-    buffer_size = 4096
-    epochs = 10
-    gradient_clip = 10
-    epsilon=0.2
+    save_video_interval = 10
+    save_rate = 10
+    log_episodes = 10
+    batch_size = 32
+    buffer_size = 128
+    epochs = 4
+    gradient_clip = 0.5
+    epsilon=0.1
     min_epsilon = 0.1
     entropy = 0.01
+    gae = 0.95
     gamma = 0.99
-    reward_scaler = 'positive'
+    reward_scaler = 'sign'
     
     critic_learning_rate = 0.0001
     actor_learning_rate = 0.0001
     use_shuffle = True
-    use_pixels = False
+    use_pixels = True
     if(use_pixels) :
-        resized_height = 84
-        resized_width = 84
-    network_type = 'mlp'
+        resized_height = 48
+        resized_width = 48
+    network_type = 'conv2d'
+    policy_type = 'actor_critic'
     #mlp
-    mlp_hidden_layers = 3
-    mlp_hidden_units = [128,128,128]
+    mlp_hidden_layers = 1
+    mlp_hidden_units = [512]
     #lstm
     if(network_type == 'lstm') :
         lstm_layers = 1
@@ -46,6 +48,8 @@ class Config() :
     elif(network_type == 'conv2d' and use_pixels) :
         conv_layers = 3
         conv_units = [32,64,64]
+        strides = [[4,4],[2,2],[1,1]]
+        kernel_size = [8,4,3]
         stack_size = 4
     
     #env = MarioEnvironment(game,save_video=save_video,save_video_interval=save_video_interval)
@@ -72,7 +76,6 @@ class Config() :
             cls.epochs = config.epochs
             cls.gradient_clip = config.gradient_clip
             cls.epsilon=config.epsilon
-            cls.min_epsilon = config.min_epsilon
             cls.entropy = config.entropy
             cls.gamma = config.gamma
             cls.save_rate = config.save_rate
