@@ -147,11 +147,11 @@ class PPO() :
 
             if(done) :
                 if(episode != 0 and episode % Config.log_episodes == 0) :
-                  average_rewards  = total_rewards / Config.log_episodes
+                  average_rewards  = total_rewards / (episode + 1)
                   data = 'episode {}/{} \t reward  {}'.format(episode,Config.episodes,average_rewards)
                   print(colored(data,'green'))
                   print(colored('timesteps : {}'.format(self.timesteps),'green'))
-                  total_rewards = 0
+                  #total_rewards = 0
                 if(episode % Config.save_rate == 0) :
                     self.save(episode)
                 episode += 1
