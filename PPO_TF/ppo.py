@@ -19,7 +19,7 @@ class PPO() :
     def __init__(self,sess) :
 
         self.sess = sess
-        if(Config.start_episode > 0) :
+        if(Config.start_timestep > 0) :
             Config.load()
         self.env = Config.env.clone()
         if(Config.policy_type == 'actor_critic') :
@@ -35,25 +35,27 @@ class PPO() :
         else :
             self.critic.init()
             self.actor.init()
-        self.timesteps = 0
-        self.epsilon_decay_step = (Config.epsilon - Config.min_epsilon) / Config.episodes
         
     
 
-    def save(self,episode) :
-        dir = Config.root_dir + '/models/episode-' + str(episode) + '/'
+    def save(self,current_timestep) :
+        dir = Config.root_dir + '/models/timestep-' + str(current_timestep) + '/'
         if not os.path.exists(Config.root_dir + '/models') :
             os.mkdir(Config.root_dir + '/models')
             os.mkdir(dir)
         elif not os.path.exists(dir):
             os.mkdir(dir)
         if(Config.policy_type == 'actor_critic') :
-            self.actor_critic.save(dir,episode)
+            self.actor_critic.save(dir,current_timestep)
         else :
-            self.actor.save(dir,episode)
-            self.critic.save(dir,episode)
+            self.actor.save(dir,current_timestep)
+            self.critic.save(dir,current_timestep)
 
-    def update_networks(self,batch) :
+    def update_networks(self,batch,current_timestep) :
+        current_update = current_timestep / Config.buffer_size
+        total_updates = Config.timesteps / Config.buffer_size
+        frac = 1.0 - (current_update - 1.0) / total_updates
+        lr = Config.actor_learning_rate(frac)
         states,rewards,mask,actions_probs,advantages = batch
         
         if(Config.policy_type == 'actor_critic') :
@@ -67,15 +69,10 @@ class PPO() :
         rewards = rewards.reshape([rewards.shape[0],1])
 
         if(Config.policy_type == 'actor_critic') :
-            self.actor_critic.train(states,advantages,actions_probs,mask,rewards,estimated_rewards)
+            self.actor_critic.train(states,advantages,actions_probs,mask,rewards,estimated_rewards,lr)
         else :
             self.actor.train(states,advantages,actions_probs,mask)
             self.critic.train(states,rewards,estimated_rewards)
-        
-        Config.epsilon -= self.epsilon_decay_step
-
-    def discount_cumsum(self,x, discount):
-        return signal.lfilter([1], [1, float(-discount)], x[::-1], axis=0)[::-1]
 
     def get_discounted_rewards_gae(self,states,rewards,dones) :
         if(Config.policy_type == 'actor_critic') :
@@ -108,7 +105,7 @@ class PPO() :
             rewards = rewards[:-1]
         return rewards
 
-    def collect_batch(self,state,next_state,total_rewards,episode) :
+    def collect_batch(self,state,next_state,total_rewards,current_timestep,episode) :
         batch_advantages = []
         batch_states = []
         batch_rewards = []
@@ -144,30 +141,28 @@ class PPO() :
             batch_rewards.append(self.reward_scaler(reward))
             total_rewards += reward
             
-
+            
             if(done) :
-                if(episode != 0 and episode % Config.log_episodes == 0) :
-                  average_rewards  = total_rewards / (episode + 1)
-                  data = 'episode {}/{} \t reward  {}'.format(episode,Config.episodes,average_rewards)
-                  print(colored(data,'green'))
-                  print(colored('timesteps : {}'.format(self.timesteps),'green'))
-                  #total_rewards = 0
-                if(episode % Config.save_rate == 0) :
-                    self.save(episode)
-                episode += 1
+                if(episode != 0 and episode % (Config.log_timesteps_interval)  == 0) :
+                    average_rewards  = total_rewards / (episode + 1)
+                    data = 'timestep {}/{} \t reward  {}'.format(current_timestep,Config.timesteps,average_rewards)
+                    print(colored(data,'green'))
                 state = self.env.reset()
                 next_state = None
-            self.timesteps += 1
+                episode += 1
+            current_timestep += 1
 
 
         batch_rewards,batch_advantages = self.get_discounted_rewards_gae(batch_states,batch_rewards,batch_dones)
 
         batch = [np.array(batch_states),np.array(batch_rewards),np.array(mask),np.array(batch_actions_probs),np.array(batch_advantages)]
-        if(episode >= Config.episodes) :
+        if(current_timestep % (Config.save_rate * Config.buffer_size) == 0) :
+            self.save(current_timestep)
+        if(current_timestep >= Config.timesteps) :
             end = True
         else :
             end = False
-        return batch,end,episode,total_rewards,state,next_state
+        return batch,end,current_timestep,total_rewards,state,next_state,episode
 
     def reward_scaler(self,reward) :
         if(Config.reward_scaler is None) :
@@ -250,10 +245,11 @@ class PPO() :
         state = self.env.reset()
         next_state = None
         total_rewards = 0
-        episode = Config.start_episode
+        current_timestep = Config.start_timestep
+        episode = 0
         while(True) :
-            batch,end,episode,total_rewards,state,next_state = self.collect_batch(state,next_state,total_rewards,episode)
-            self.update_networks(batch)
+            batch,end,current_timestep,total_rewards,state,next_state,episode = self.collect_batch(state,next_state,total_rewards,current_timestep,episode)
+            self.update_networks(batch,current_timestep)
             if(end) :
                 break
 

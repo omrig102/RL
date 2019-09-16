@@ -27,16 +27,16 @@ class ActorCritic() :
 
     def init(self) :
         self.saver = tf.train.Saver(tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope=self.scope))
-        if(Config.start_episode > 0) :
+        if(Config.start_timestep > 0) :
             self.load()
 
     def load(self) :
-        dir = Config.root_dir + '/models/episode-' + str(Config.start_episode) + '/actor-critic-' + self.scope + '/model.ckpt-' + str(Config.start_episode)
+        dir = Config.root_dir + '/models/timestep-' + str(Config.start_timestep) + '/actor-critic-' + self.scope + '/model.ckpt-' + str(Config.start_timestep)
         
         self.saver.restore(self.sess,dir)
 
-    def save(self,dir,episode) :
-        self.saver.save(self.sess,dir + '/actor-critic-' + self.scope + '/model.ckpt',global_step=episode)
+    def save(self,dir,timestep) :
+        self.saver.save(self.sess,dir + '/actor-critic-' + self.scope + '/model.ckpt',global_step=timestep)
 
 
     def build_network(self) :
@@ -130,10 +130,11 @@ class ActorCritic() :
 
         loss = value_loss * 0.5 - policy_loss - Config.entropy * entropy
 
-        optimizer = tf.train.AdamOptimizer(learning_rate=Config.actor_learning_rate)
+        optimizer = tf.train.AdamOptimizer(learning_rate=self.lr)
         self.optimizer = self.clip_by_global_norm(loss,optimizer,Config.gradient_clip)
 
     def build_network_discrete(self) :
+        self.lr = tf.placeholder(shape=[],dtype=tf.float32,name='lr')
         self.mask = tf.placeholder(shape=[None,self.env.get_output_size()],dtype=tf.float32,name='mask')
         self.advantage = tf.placeholder(shape=[None,1],dtype=tf.float32,name='advantage')
         self.reward = tf.placeholder(shape=[None,1],dtype=tf.float32,name='reward')
@@ -160,7 +161,7 @@ class ActorCritic() :
             action_probs = self.sess.run(self.probs,feed_dict={self.state:state,self.chosen_action:action})
             return action,action_probs
 
-    def train(self,states,advantages,old_probs,masks,rewards,old_preds) :
+    def train(self,states,advantages,old_probs,masks,rewards,old_preds,lr) :
 
         randomize = np.arange(len(states))
         for _ in range(Config.epochs) :
@@ -170,16 +171,16 @@ class ActorCritic() :
                 
                 batch_states,batch_advantages,batch_old_probs,batch_masks,batch_rewards,batch_old_preds = self.prepare_batch(states,advantages,old_probs,masks,rewards,old_preds,index,randomize)
                 if(self.env.is_discrete) :
-                    self.__train_discrete(batch_states,batch_advantages,batch_old_probs,batch_masks,batch_rewards,batch_old_preds)
+                    self.__train_discrete(batch_states,batch_advantages,batch_old_probs,batch_masks,batch_rewards,batch_old_preds,lr)
                 else :
-                    self.__train_continuous(batch_states,batch_advantages,batch_old_probs,batch_masks,batch_rewards,batch_old_preds)
+                    self.__train_continuous(batch_states,batch_advantages,batch_old_probs,batch_masks,batch_rewards,batch_old_preds,lr)
 
-    def __train_discrete(self,batch_states,batch_advantages,batch_old_probs,batch_masks,batch_rewards,batch_old_preds) :
-        self.sess.run(self.optimizer,feed_dict={self.state:batch_states,self.advantage:batch_advantages
+    def __train_discrete(self,batch_states,batch_advantages,batch_old_probs,batch_masks,batch_rewards,batch_old_preds,lr) :
+        self.sess.run(self.optimizer,feed_dict={self.lr:lr,self.state:batch_states,self.advantage:batch_advantages
                     ,self.old_probs:batch_old_probs,self.mask:batch_masks,self.reward:batch_rewards,self.old_preds:batch_old_preds})
 
-    def __train_continuous(self,batch_states,batch_advantages,batch_old_probs,batch_actions,batch_rewards,batch_old_preds) :
-        self.sess.run(self.optimizer,feed_dict={self.state:batch_states,self.advantage:batch_advantages
+    def __train_continuous(self,batch_states,batch_advantages,batch_old_probs,batch_actions,batch_rewards,batch_old_preds,lr) :
+        self.sess.run(self.optimizer,feed_dict={self.lr:lr,self.state:batch_states,self.advantage:batch_advantages
                     ,self.old_probs:batch_old_probs,self.chosen_action:batch_actions,self.reward:batch_rewards,self.old_preds:batch_old_preds})
 
     def copy_trainables(self,actor_scope) :
