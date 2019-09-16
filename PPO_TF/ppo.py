@@ -62,7 +62,7 @@ class PPO() :
             estimated_rewards = self.critic.predict(states)
         #rewards = rewards.reshape([rewards.shape[0],1])
         #advantages = rewards - estimated_rewards
-        #advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-6)
+        advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-6)
         advantages = advantages.reshape([advantages.shape[0],1])
         rewards = rewards.reshape([rewards.shape[0],1])
 
@@ -86,11 +86,16 @@ class PPO() :
         v_states = v_states.reshape([v_states.shape[0]])
         rewards = np.array(rewards)
         lastgaelam = 0
-        for t in reversed(range(len(rewards) - 1)):
-            nextnonterminal = 1 - dones[t+1]
-            nextvalues = v_states[t+1]
+        for t in reversed(range(Config.buffer_size)):
+            if(t == Config.buffer_size - 1) :
+                nextnonterminal = 1 - dones[-1]
+                nextvalues = v_states[-1]
+            else :
+                nextnonterminal = 1 - dones[t+1]
+                nextvalues = v_states[t+1]
             delta = rewards[t] + Config.gamma * nextvalues * nextnonterminal - v_states[t]
             advantages[t] = lastgaelam = delta + Config.gamma * Config.gae * nextnonterminal * lastgaelam
+        
         
         discounted_rewards = advantages + v_states
 
