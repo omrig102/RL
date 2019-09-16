@@ -77,7 +77,7 @@ class PPO() :
     def discount_cumsum(self,x, discount):
         return signal.lfilter([1], [1, float(-discount)], x[::-1], axis=0)[::-1]
 
-    def get_discounted_rewards_gae(self,states,rewards,done) :
+    def get_discounted_rewards_gae(self,states,rewards,dones) :
         if(Config.policy_type == 'actor_critic') :
             v_states = self.actor_critic.predict_value(states)
         else :
@@ -86,21 +86,13 @@ class PPO() :
         v_states = v_states.reshape([v_states.shape[0]])
         rewards = np.array(rewards)
         lastgaelam = 0
-        for t in reversed(range(len(rewards))):
-            if t == len(rewards) - 1:
-                if(done) :
-                    nextnonterminal = 0.0
-                else :
-                    nextnonterminal = 1.0
-                nextvalues = 0
-            else:
-                nextnonterminal = 1.0
-                nextvalues = v_states[t+1]
+        for t in reversed(range(len(rewards) - 1)):
+            nextnonterminal = 1 - dones[t+1]
+            nextvalues = v_states[t+1]
             delta = rewards[t] + Config.gamma * nextvalues * nextnonterminal - v_states[t]
             advantages[t] = lastgaelam = delta + Config.gamma * Config.gae * nextnonterminal * lastgaelam
         
-        values = np.asarray(rewards, dtype=np.float32)
-        discounted_rewards = advantages + values
+        discounted_rewards = advantages + v_states
 
         return discounted_rewards,advantages
 
@@ -112,16 +104,15 @@ class PPO() :
         return rewards
 
     def collect_batch(self,state,next_state,total_rewards,episode) :
-        states = []
         batch_advantages = []
         batch_states = []
-        rewards = []
         batch_rewards = []
+        batch_dones = []
         batch_actions_probs = []
         mask = []
         for step in range(Config.buffer_size) :
             state = self.preprocess(state,next_state)
-            states.append(state) 
+            batch_states.append(state) 
 
             if(self.env.is_discrete) :
                 if(Config.policy_type == 'actor_critic') :
@@ -144,18 +135,12 @@ class PPO() :
 
             
             next_state,reward,done,_ = self.env.step(action)
-            rewards.append(self.reward_scaler(reward))
+            batch_dones.append(done)
+            batch_rewards.append(self.reward_scaler(reward))
             total_rewards += reward
             
 
             if(done) :
-                rewards,advantages = self.get_discounted_rewards_gae(states,rewards,True)
-                batch_rewards += rewards.tolist()
-                batch_advantages += advantages.tolist()
-                #batch_rewards += self.get_discounted_rewards(rewards,True)
-                batch_states += states
-                states = []
-                rewards = []
                 if(episode != 0 and episode % Config.log_episodes == 0) :
                   average_rewards  = total_rewards / Config.log_episodes
                   data = 'episode {}/{} \t reward  {}'.format(episode,Config.episodes,average_rewards)
@@ -169,17 +154,8 @@ class PPO() :
                 next_state = None
             self.timesteps += 1
 
-        if(len(states) > 0) :
-            #rewards = self.get_discounted_rewards(rewards,False)
-            #batch_rewards += rewards
-            rewards,advantages = self.get_discounted_rewards_gae(states,rewards,False)
-            batch_rewards += rewards.tolist()
-            batch_advantages += advantages.tolist()
-            if(len(rewards) < len(states)) :
-                states = states[:-1]
-                mask = mask[:-1]
-                batch_actions_probs = batch_actions_probs[:-1]
-            batch_states += states
+
+        batch_rewards,batch_advantages = self.get_discounted_rewards_gae(batch_states,batch_rewards,batch_dones)
 
         batch = [np.array(batch_states),np.array(batch_rewards),np.array(mask),np.array(batch_actions_probs),np.array(batch_advantages)]
         if(episode >= Config.episodes) :
