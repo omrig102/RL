@@ -95,9 +95,9 @@ class ActorCritic() :
 
     def loss_continuous(self) :
         ratio = self.probs / tf.maximum(1e-10,self.old_probs)
-        policy_unclipped = -ratio * self.advantage
-        policy_clipped = -tf.clip_by_value(ratio,1-Config.epsilon,1+Config.epsilon) * self.advantage
-        policy_loss = tf.reduce_mean(tf.maximum(policy_unclipped,policy_clipped))
+        policy_unclipped = ratio * self.advantage
+        policy_clipped = tf.clip_by_value(ratio,1-Config.epsilon,1+Config.epsilon) * self.advantage
+        policy_loss = tf.reduce_mean(tf.minimum(policy_unclipped,policy_clipped))
         
         value_clipped = self.old_preds + tf.clip_by_value(self.value_outputs - self.old_preds, - Config.epsilon, Config.epsilon)
         value_loss_unclipped = tf.square(self.value_outputs - self.reward)
@@ -105,9 +105,9 @@ class ActorCritic() :
         
         value_loss = 0.5 * tf.reduce_mean(tf.maximum(value_loss_unclipped, value_loss_clipped))
         
-        entropy = tf.reduce_sum(self.probs * tf.log(tf.maximum(self.probs,1e-10)), 1)
+        entropy = -tf.reduce_sum(self.probs * tf.log(tf.maximum(self.probs,1e-10)), 1)
 
-        loss = policy_loss + Config.entropy * entropy + value_loss * 0.5
+        loss = -policy_loss - Config.entropy * entropy + value_loss * 0.5
 
         optimizer = tf.train.AdamOptimizer(learning_rate=Config.actor_learning_rate)
         self.optimizer = self.clip_by_global_norm(loss,optimizer,Config.gradient_clip)
@@ -116,9 +116,9 @@ class ActorCritic() :
         prob = self.mask * self.action_outputs
         old_prob = (self.mask * self.old_probs) + 1e-10
         ratio = prob / old_prob
-        policy_unclipped = -ratio * self.advantage
-        policy_clipped = -tf.clip_by_value(ratio,1-Config.epsilon,1+Config.epsilon) * self.advantage
-        policy_loss = tf.reduce_mean(tf.maximum(policy_unclipped,policy_clipped))
+        policy_unclipped = ratio * self.advantage
+        policy_clipped = tf.clip_by_value(ratio,1-Config.epsilon,1+Config.epsilon) * self.advantage
+        policy_loss = tf.reduce_mean(tf.minimum(policy_unclipped,policy_clipped))
         
         value_clipped = self.old_preds + tf.clip_by_value(self.value_outputs - self.old_preds, - Config.epsilon, Config.epsilon)
         value_loss_unclipped = tf.square(self.value_outputs - self.reward)
@@ -128,7 +128,7 @@ class ActorCritic() :
         
         entropy = tf.reduce_sum(prob * tf.log(tf.maximum(prob,1e-10)), 1)
 
-        loss = policy_loss + Config.entropy * entropy + value_loss * 0.5
+        loss = value_loss * 0.5 - policy_loss - Config.entropy * entropy
 
         optimizer = tf.train.AdamOptimizer(learning_rate=Config.actor_learning_rate)
         self.optimizer = self.clip_by_global_norm(loss,optimizer,Config.gradient_clip)
