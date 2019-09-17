@@ -9,12 +9,14 @@ class Config() :
     #game = 'SuperMarioBros-v0'
     game = 'Pong-v0'
     root_dir = '.'
+    log_dir = 'logs'
     timesteps = 2e7
     start_timestep = 0
     save_video = True
     save_video_interval = 10
-    save_rate = 10
+    save_rate = 100
     log_timesteps_interval = 10
+    vf_factor = 0.5
     batch_size = 32
     buffer_size = 128
     epochs = 4
