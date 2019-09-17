@@ -60,10 +60,10 @@ class PPO() :
         total_updates = Config.timesteps / Config.buffer_size
         frac = 1.0 - (current_update - 1.0) / total_updates
         lr = Config.actor_learning_rate(frac)
-        states,rewards,actions,actions_probs,advantages = batch
+        states,rewards,actions,actions_probs,advantages,v_states = batch
         
         if(Config.policy_type == 'actor_critic') :
-             estimated_rewards = self.actor_critic.predict_value(states)
+             estimated_rewards = v_states.reshape(v_states.shape[0],1)
         else :
             estimated_rewards = self.critic.predict(states)
         #rewards = rewards.reshape([rewards.shape[0],1])
@@ -100,7 +100,7 @@ class PPO() :
         
         discounted_rewards = advantages + v_states
 
-        return discounted_rewards,advantages
+        return discounted_rewards,advantages,v_states
 
     def get_discounted_rewards(self,rewards,done):
         for j in range(len(rewards) - 2, -1, -1):
@@ -122,15 +122,14 @@ class PPO() :
 
             if(self.env.is_discrete) :
                 if(Config.policy_type == 'actor_critic') :
-                    actions_probs,action = self.actor_critic.predict_action(np.expand_dims(state,axis=0))
-                    actions_probs = actions_probs.reshape([actions_probs.shape[1]])
-                    action = action[0]
+                    action,actions_probs = self.actor_critic.predict_action(np.expand_dims(state,axis=0))
+                    current_action = action[0]
                 else :
                     actions_probs = self.actor.predict(np.expand_dims(state,axis=0))
                     actions_probs = actions_probs.reshape([actions_probs.shape[1]])
                     action = np.random.choice(range(len(actions_probs)),p=actions_probs)
-                current_action = np.zeros(shape=actions_probs.shape)
-                current_action[action] = 1
+                    current_action = np.zeros(shape=actions_probs.shape)
+                    current_action[action] = 1
                 
                 actions.append(current_action)
                 batch_actions_probs.append(actions_probs)
@@ -159,9 +158,9 @@ class PPO() :
             current_timestep += 1
 
 
-        batch_rewards,batch_advantages = self.get_discounted_rewards_gae(batch_states,batch_rewards,batch_dones)
+        batch_rewards,batch_advantages,v_states = self.get_discounted_rewards_gae(batch_states,batch_rewards,batch_dones)
 
-        batch = [np.array(batch_states),np.array(batch_rewards),np.array(actions),np.array(batch_actions_probs),np.array(batch_advantages)]
+        batch = [np.array(batch_states),np.array(batch_rewards),np.array(actions),np.array(batch_actions_probs),np.array(batch_advantages),np.array(v_states)]
         if(current_timestep % (Config.save_rate * Config.buffer_size) == 0) :
             self.save(current_timestep)
         if(current_timestep >= Config.timesteps) :

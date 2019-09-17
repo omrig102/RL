@@ -115,8 +115,8 @@ class ActorCritic() :
         self.optimizer = self.clip_by_global_norm(loss,optimizer,Config.gradient_clip)
 
     def loss_discrete(self) :
-        log_prob = tf.nn.softmax_cross_entropy_with_logits_v2(logits=self.action_outputs,labels=self.action)
-        old_log_prob = tf.nn.softmax_cross_entropy_with_logits_v2(logits=self.old_probs,labels=self.action)
+        log_prob = self.neg_log_prob
+        old_log_prob = self.old_probs
         ratio = tf.exp(old_log_prob - log_prob)
         policy_unclipped = -ratio * self.advantage
         policy_clipped = -tf.clip_by_value(ratio,1-Config.epsilon,1+Config.epsilon) * self.advantage
@@ -149,17 +149,19 @@ class ActorCritic() :
 
     def build_network_discrete(self) :
         self.lr = tf.placeholder(shape=[],dtype=tf.float32,name='lr')
-        self.action = tf.placeholder(shape=[None,self.env.get_output_size()],dtype=tf.float32,name='action')
+        self.action = tf.placeholder(shape=[None],dtype=tf.int64,name='action')
         self.advantage = tf.placeholder(shape=[None,1],dtype=tf.float32,name='advantage')
         self.reward = tf.placeholder(shape=[None,1],dtype=tf.float32,name='reward')
         self.old_preds = tf.placeholder(shape=[None,1],dtype=tf.float32,name='old_preds')
-        self.old_probs = tf.placeholder(shape=[None,self.env.get_output_size()],dtype=tf.float32,name='old_probs')
+        self.old_probs = tf.placeholder(shape=[None,1],dtype=tf.float32,name='old_probs')
         self.state = tf.placeholder(shape=self.input_size,dtype=tf.float32,name='state')
         
         base_network = self.build_base_network(self.state)
-        self.action_outputs = tf.layers.dense(base_network,units=self.env.get_output_size(),activation=tf.nn.softmax,kernel_initializer=tf.orthogonal_initializer(np.sqrt(2)),name='action_outputs')
+        self.action_outputs = tf.layers.dense(base_network,units=self.env.get_output_size(),activation=None,kernel_initializer=tf.orthogonal_initializer(np.sqrt(2)),name='action_outputs')
         u = tf.random_uniform(tf.shape(self.action_outputs), dtype=self.action_outputs.dtype)
         self.sample = tf.argmax(self.action_outputs - tf.log(-tf.log(u)), axis=-1)
+        one_hot_action = tf.one_hot(self.action, self.action_outputs.get_shape().as_list()[-1])
+        self.neg_log_prob = tf.nn.softmax_cross_entropy_with_logits_v2(logits=self.action_outputs,labels=one_hot_action)
         self.value_outputs = tf.layers.dense(base_network,units=1,activation=None,kernel_initializer=tf.orthogonal_initializer(np.sqrt(2)),name='value_outputs')
 
 
@@ -171,7 +173,9 @@ class ActorCritic() :
 
     def predict_action(self,state) :
         if(self.env.is_discrete) :
-            return self.sess.run([self.action_outputs,self.sample],feed_dict={self.state:state})
+            action = self.sess.run(self.sample,feed_dict={self.state:state})
+            neg_log_prob = self.sess.run(self.neg_log_prob,feed_dict={self.state:state,self.action:action})
+            return neg_log_prob,action
         else :
             action = self.sess.run(self.action,feed_dict={self.state:state})
             action_probs = self.sess.run(self.probs,feed_dict={self.state:state,self.chosen_action:action})
