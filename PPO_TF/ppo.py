@@ -122,7 +122,7 @@ class PPO() :
 
             if(self.env.is_discrete) :
                 if(Config.policy_type == 'actor_critic') :
-                    action,actions_probs = self.actor_critic.predict_action(np.expand_dims(state,axis=0))
+                    actions_probs,action = self.actor_critic.predict_action(np.expand_dims(state,axis=0))
                     current_action = action[0]
                 else :
                     actions_probs = self.actor.predict(np.expand_dims(state,axis=0))
