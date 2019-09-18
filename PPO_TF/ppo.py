@@ -150,7 +150,7 @@ class PPO() :
                 episode += 1
                 state = self.env.reset()
                 next_state = None
-                current_timestep += 1
+            current_timestep += 1
 
         batch_rewards,batch_advantages,v_states = self.get_discounted_rewards_gae(batch_states,batch_rewards,dones)
 
