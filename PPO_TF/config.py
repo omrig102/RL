@@ -10,15 +10,15 @@ class Config() :
     game = 'Pong-v0'
     root_dir = '.'
     log_dir = 'logs'
-    timesteps = 2e7
-    start_timestep = 0
+    with_summary = True
+    episodes = 10000000
+    start_episode = 0
     save_video = True
     save_video_interval = 10
-    save_rate = 100
-    log_timesteps_interval = 10
-    vf_factor = 0.5
+    save_rate = 10
+    log_episodes = 10
     batch_size = 32
-    buffer_size = 128
+    buffer_size = 512
     epochs = 4
     gradient_clip = 0.5
     epsilon=0.1
@@ -28,8 +28,8 @@ class Config() :
     gamma = 0.99
     reward_scaler = 'sign'
     
-    critic_learning_rate = lambda f : f * 2.5e-4
-    actor_learning_rate = lambda f : f * 2.5e-4
+    critic_learning_rate = 0.0001
+    actor_learning_rate = 0.0001
     use_shuffle = True
     use_pixels = True
     if(use_pixels) :
@@ -72,12 +72,13 @@ class Config() :
             config = pickle.load(f)
             cls.game = config.game
             cls.root_dir = config.root_dir
-            cls.timesteps = config.timesteps
+            cls.episodes = config.episodes
             cls.batch_size = config.batch_size
             cls.buffer_size = config.buffer_size
             cls.epochs = config.epochs
             cls.gradient_clip = config.gradient_clip
             cls.epsilon=config.epsilon
+            cls.min_epsilon = config.min_epsilon
             cls.entropy = config.entropy
             cls.gamma = config.gamma
             cls.save_rate = config.save_rate
