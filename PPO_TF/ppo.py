@@ -19,7 +19,7 @@ class PPO() :
     def __init__(self,sess) :
 
         self.sess = sess
-        if(Config.start_timestep > 0) :
+        if(Config.start_episode > 0) :
             Config.load()
         self.env = Config.env.clone()
         if(Config.policy_type == 'actor_critic') :
@@ -40,27 +40,25 @@ class PPO() :
         else :
             self.critic.init()
             self.actor.init()
+        self.timesteps = 0
+        self.epsilon_decay_step = (Config.epsilon - Config.min_epsilon) / Config.episodes
         
     
 
-    def save(self,current_timestep) :
-        dir = Config.root_dir + '/models/timestep-' + str(current_timestep) + '/'
+    def save(self,episode) :
+        dir = Config.root_dir + '/models/episode-' + str(episode) + '/'
         if not os.path.exists(Config.root_dir + '/models') :
             os.mkdir(Config.root_dir + '/models')
             os.mkdir(dir)
         elif not os.path.exists(dir):
             os.mkdir(dir)
         if(Config.policy_type == 'actor_critic') :
-            self.actor_critic.save(dir,current_timestep)
+            self.actor_critic.save(dir,episode)
         else :
-            self.actor.save(dir,current_timestep)
-            self.critic.save(dir,current_timestep)
+            self.actor.save(dir,episode)
+            self.critic.save(dir,episode)
 
-    def update_networks(self,batch,current_timestep) :
-        current_update = current_timestep / Config.buffer_size
-        total_updates = Config.timesteps / Config.buffer_size
-        frac = 1.0 - (current_update - 1.0) / total_updates
-        lr = Config.actor_learning_rate(frac)
+    def update_networks(self,batch) :
         states,rewards,actions,actions_probs,advantages,v_states = batch
         
         if(Config.policy_type == 'actor_critic') :
@@ -74,11 +72,15 @@ class PPO() :
         
 
         if(Config.policy_type == 'actor_critic') :
-            self.actor_critic.train(states,advantages,actions_probs,actions,rewards,estimated_rewards,lr)
+            self.actor_critic.train(states,advantages,actions_probs,actions,rewards,estimated_rewards)
         else :
             self.actor.train(states,advantages,actions_probs,actions)
             self.critic.train(states,rewards,estimated_rewards)
         
+        Config.epsilon -= self.epsilon_decay_step
+
+    def discount_cumsum(self,x, discount):
+        return signal.lfilter([1], [1, float(-discount)], x[::-1], axis=0)[::-1]
 
     def get_discounted_rewards_gae(self,states,rewards,dones) :
         if(Config.policy_type == 'actor_critic') :
@@ -103,7 +105,25 @@ class PPO() :
 
         return discounted_rewards,advantages,v_states
 
-    def collect_batch(self,state,next_state,total_rewards,current_timestep,episode) :
+    def get_discounted_rewards(self,states,rewards,dones):
+        v_states = self.actor_critic.predict_value(states)
+        v_states = v_states.reshape([v_states.shape[0]])
+        returns = np.array(rewards)
+        lastValue = 0
+        for j in reversed(range(Config.buffer_size)):
+            if j == Config.buffer_size - 1:
+                nextnonterminal = 1.0 - dones[-1]
+                nextvalues = returns[-1]
+            else:
+                nextnonterminal = 1.0 - dones[j+1]
+                nextvalues = returns[j+1]
+            returns[j] = rewards[j] + nextvalues * Config.gamma * nextnonterminal
+
+        advantages = returns - v_states
+
+        return returns,advantages,v_states
+
+    def collect_batch(self,state,next_state,total_rewards,episode) :
         batch_advantages = []
         batch_states = []
         batch_rewards = []
@@ -141,28 +161,27 @@ class PPO() :
             
 
             if(done) :
-                if(episode != 0 and episode % (Config.log_episodes)  == 0) :
-                    average_rewards  = total_rewards / Config.log_episodes
-                    data = 'timestep {}/{} \t reward  {}'.format(current_timestep,Config.timesteps,average_rewards)
-                    print(colored(data,'green'))
-                    total_rewards = 0
+                if(episode != Config.start_episode and episode % Config.log_episodes == 0) :
+                  average_rewards  = total_rewards / Config.log_episodes
+                  data = 'episode {}/{} \t reward  {}'.format(episode,Config.episodes,average_rewards)
+                  print(colored(data,'green'))
+                  print(colored('timesteps : {}'.format(self.timesteps),'green'))
+                  total_rewards = 0
                 if(episode % Config.save_rate == 0) :
-                    self.save(current_timestep)
-                
+                    self.save(episode)
                 episode += 1
                 state = self.env.reset()
                 next_state = None
-            current_timestep += 1
+            self.timesteps += 1
 
         batch_rewards,batch_advantages,v_states = self.get_discounted_rewards_gae(batch_states,batch_rewards,dones)
 
         batch = [np.array(batch_states),np.array(batch_rewards),np.array(actions),np.array(batch_actions_probs),np.array(batch_advantages),np.array(v_states)]
-        
-        if(current_timestep >= Config.timesteps) :
+        if(episode >= Config.episodes) :
             end = True
         else :
             end = False
-        return batch,end,current_timestep,total_rewards,state,next_state,episode
+        return batch,end,episode,total_rewards,state,next_state
 
     def reward_scaler(self,reward) :
         if(Config.reward_scaler is None) :
@@ -245,11 +264,10 @@ class PPO() :
         state = self.env.reset()
         next_state = None
         total_rewards = 0
-        current_timestep = Config.start_timestep
-        episode = 0
+        episode = Config.start_episode
         while(True) :
-            batch,end,current_timestep,total_rewards,state,next_state,episode = self.collect_batch(state,next_state,total_rewards,current_timestep,episode)
-            self.update_networks(batch,current_timestep)
+            batch,end,episode,total_rewards,state,next_state = self.collect_batch(state,next_state,total_rewards,episode)
+            self.update_networks(batch)
             if(end) :
                 break
 

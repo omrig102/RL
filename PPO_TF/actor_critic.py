@@ -28,16 +28,16 @@ class ActorCritic() :
     def init(self,writer=None) :
         self.writer = writer
         self.saver = tf.train.Saver(tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope=self.scope))
-        if(Config.start_timestep > 0) :
+        if(Config.start_episode > 0) :
             self.load()
 
     def load(self) :
-        dir = Config.root_dir + '/models/timestep-' + str(Config.start_timestep) + '/actor-critic-' + self.scope + '/model.ckpt-' + str(Config.start_timestep)
+        dir = Config.root_dir + '/models/episode-' + str(Config.start_episode) + '/actor-critic-' + self.scope + '/model.ckpt-' + str(Config.start_episode)
         
         self.saver.restore(self.sess,dir)
 
-    def save(self,dir,current_timestep) :
-        self.saver.save(self.sess,dir + '/actor-critic-' + self.scope + '/model.ckpt',global_step=current_timestep)
+    def save(self,dir,episode) :
+        self.saver.save(self.sess,dir + '/actor-critic-' + self.scope + '/model.ckpt',global_step=episode)
 
 
     def build_network(self) :
@@ -111,7 +111,7 @@ class ActorCritic() :
 
         loss = policy_loss + Config.entropy * entropy + value_loss * 0.5
 
-        optimizer = tf.train.AdamOptimizer(learning_rate=self.lr)
+        optimizer = tf.train.AdamOptimizer(learning_rate=Config.actor_learning_rate)
         self.optimizer = self.clip_by_global_norm(loss,optimizer,Config.gradient_clip)
 
     def loss_discrete(self) :
@@ -138,7 +138,7 @@ class ActorCritic() :
 
         
 
-        optimizer = tf.train.AdamOptimizer(learning_rate=self.lr)
+        optimizer = tf.train.AdamOptimizer(learning_rate=Config.actor_learning_rate)
         self.optimizer = self.clip_by_global_norm(loss,optimizer,Config.gradient_clip)
 
         if(Config.with_summary) :
@@ -149,7 +149,6 @@ class ActorCritic() :
 
 
     def build_network_discrete(self) :
-        self.lr = tf.placeholder(shape=[],dtype=tf.float32,name='lr')
         self.action = tf.placeholder(shape=[None,self.env.get_output_size()],dtype=tf.float32,name='action')
         self.advantage = tf.placeholder(shape=[None,1],dtype=tf.float32,name='advantage')
         self.reward = tf.placeholder(shape=[None,1],dtype=tf.float32,name='reward')
@@ -176,7 +175,7 @@ class ActorCritic() :
             action_probs = self.sess.run(self.probs,feed_dict={self.state:state,self.chosen_action:action})
             return action,action_probs
 
-    def train(self,states,advantages,old_probs,actions,rewards,old_preds,lr) :
+    def train(self,states,advantages,old_probs,actions,rewards,old_preds) :
 
         randomize = np.arange(len(states))
         for epoch in range(Config.epochs) :
@@ -187,24 +186,24 @@ class ActorCritic() :
                 batch_states,batch_advantages,batch_old_probs,batch_actions,batch_rewards,batch_old_preds = self.prepare_batch(states,advantages,old_probs,actions,rewards,old_preds,index,randomize)
                 if(self.env.is_discrete) :
                     if(Config.with_summary) :
-                        policy_loss_t,value_loss_t,entropy_t,loss,_ = self.__train_discrete(batch_states,batch_advantages,batch_old_probs,batch_actions,batch_rewards,batch_old_preds,lr)
+                        policy_loss_t,value_loss_t,entropy_t,loss,_ = self.__train_discrete(batch_states,batch_advantages,batch_old_probs,batch_actions,batch_rewards,batch_old_preds)
                         if(index == int(Config.buffer_size/Config.batch_size)-1 and epoch == Config.epochs-1) :
                             self.writer.add_summary(policy_loss_t)
                             self.writer.add_summary(value_loss_t)
                             self.writer.add_summary(entropy_t)
                             self.writer.add_summary(loss)
                         else :
-                            self.__train_discrete(batch_states,batch_advantages,batch_old_probs,batch_actions,batch_rewards,batch_old_preds,lr)
+                            self.__train_discrete(batch_states,batch_advantages,batch_old_probs,batch_actions,batch_rewards,batch_old_preds)
                 
                 else :
-                    self.__train_continuous(batch_states,batch_advantages,batch_old_probs,batch_actions,batch_rewards,batch_old_preds,lr)
+                    self.__train_continuous(batch_states,batch_advantages,batch_old_probs,batch_actions,batch_rewards,batch_old_preds)
 
-    def __train_discrete(self,batch_states,batch_advantages,batch_old_probs,batch_actions,batch_rewards,batch_old_preds,lr) :
+    def __train_discrete(self,batch_states,batch_advantages,batch_old_probs,batch_actions,batch_rewards,batch_old_preds) :
         if(Config.with_summary) :
             return self.sess.run([self.policy_loss_summary,self.value_loss_summary,self.entropy_summary,self.loss_summary,self.optimizer],feed_dict={self.state:batch_states,self.advantage:batch_advantages
-                        ,self.old_probs:batch_old_probs,self.action:batch_actions,self.reward:batch_rewards,self.old_preds:batch_old_preds,self.lr:lr})
+                        ,self.old_probs:batch_old_probs,self.action:batch_actions,self.reward:batch_rewards,self.old_preds:batch_old_preds})
         return self.sess.run(self.optimizer,feed_dict={self.state:batch_states,self.advantage:batch_advantages
-                        ,self.old_probs:batch_old_probs,self.action:batch_actions,self.reward:batch_rewards,self.old_preds:batch_old_preds,self.lr:lr})
+                        ,self.old_probs:batch_old_probs,self.action:batch_actions,self.reward:batch_rewards,self.old_preds:batch_old_preds})
 
     def __train_continuous(self,batch_states,batch_advantages,batch_old_probs,batch_actions,batch_rewards,batch_old_preds) :
         self.sess.run(self.optimizer,feed_dict={self.state:batch_states,self.advantage:batch_advantages
