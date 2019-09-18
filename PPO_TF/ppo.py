@@ -147,6 +147,7 @@ class PPO() :
                     print(colored(data,'green'))
                 if(episode % Config.save_rate == 0) :
                     self.save(current_timestep)
+                total_rewards = 0
                 episode += 1
                 state = self.env.reset()
                 next_state = None
