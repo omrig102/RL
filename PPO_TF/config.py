@@ -7,12 +7,12 @@ import pickle
 class Config() :
 
     #game = 'SuperMarioBros-v0'
-    game = 'Pong-v0'
+    game = 'Breakout-v0'
     root_dir = '.'
     log_dir = 'logs'
     with_summary = True
-    episodes = 10000000
-    start_episode = 0
+    timesteps = 2e7
+    start_timestep = 0
     save_video = True
     save_video_interval = 10
     save_rate = 10
@@ -28,8 +28,8 @@ class Config() :
     gamma = 0.99
     reward_scaler = 'sign'
     
-    critic_learning_rate = 0.0001
-    actor_learning_rate = 0.0001
+    critic_learning_rate = lambda f : f * 2.5e-4
+    actor_learning_rate = lambda f : f * 2.5e-4
     use_shuffle = True
     use_pixels = True
     if(use_pixels) :
@@ -72,7 +72,7 @@ class Config() :
             config = pickle.load(f)
             cls.game = config.game
             cls.root_dir = config.root_dir
-            cls.episodes = config.episodes
+            cls.timesteps = config.timesteps
             cls.batch_size = config.batch_size
             cls.buffer_size = config.buffer_size
             cls.epochs = config.epochs
