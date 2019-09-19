@@ -4,8 +4,6 @@ from termcolor import colored
 import numpy as np
 import os
 import tensorflow as tf
-from critic import Critic
-from actor import Actor
 from actor_critic import ActorCritic
 import cv2
 import matplotlib.pyplot as plt
@@ -22,11 +20,7 @@ class PPO() :
         if(Config.start_timestep > 0) :
             Config.load()
         self.env = Config.env.clone()
-        if(Config.policy_type == 'actor_critic') :
-            self.actor_critic = ActorCritic(sess,self.env,'actor_critic')
-        else :
-            self.critic = Critic(sess,self.env,'critic')
-            self.actor = Actor(sess,self.env,'new_actor')
+        self.actor_critic = ActorCritic(sess,self.env.get_input_size(),self.env.get_output_size(),self.env.is_discrete,'actor_critic')
         init = tf.global_variables_initializer()
         sess.run(init)
         
@@ -35,11 +29,7 @@ class PPO() :
         else :
             self.writer = None
 
-        if(Config.policy_type == 'actor_critic') :
-            self.actor_critic.init(self.writer)
-        else :
-            self.critic.init()
-            self.actor.init()
+        self.actor_critic.init(self.writer)
         
     
 
@@ -50,43 +40,12 @@ class PPO() :
             os.mkdir(dir)
         elif not os.path.exists(dir):
             os.mkdir(dir)
-        if(Config.policy_type == 'actor_critic') :
-            self.actor_critic.save(dir,current_timestep)
-        else :
-            self.actor.save(dir,current_timestep)
-            self.critic.save(dir,current_timestep)
-
-    def update_networks(self,batch,current_timestep) :
-        current_update = current_timestep / Config.buffer_size
-        total_updates = Config.timesteps / Config.buffer_size
-        frac = 1.0 - (current_update - 1.0) / total_updates
-        lr = Config.actor_learning_rate(frac)
-        states,rewards,actions,actions_probs,advantages,v_states = batch
-        
-        if(Config.policy_type == 'actor_critic') :
-             estimated_rewards = v_states.reshape(v_states.shape[0],1)
-        else :
-            estimated_rewards = self.critic.predict(states)
-        advantages = advantages.reshape([advantages.shape[0],1])
-        rewards = rewards.reshape([rewards.shape[0],1])
-
-        advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-6)
-        
-
-        if(Config.policy_type == 'actor_critic') :
-            self.actor_critic.train(states,advantages,actions_probs,actions,rewards,estimated_rewards,lr)
-        else :
-            self.actor.train(states,advantages,actions_probs,actions)
-            self.critic.train(states,rewards,estimated_rewards)
+        self.actor_critic.save(dir,current_timestep)
         
 
     def get_discounted_rewards_gae(self,states,rewards,dones) :
-        if(Config.policy_type == 'actor_critic') :
-            v_states = self.actor_critic.predict_value(states)
-        else :
-            v_states = self.critic.predict(states)
+        v_states = self.actor_critic.predict_value(states)
         advantages = np.zeros_like(rewards)
-        v_states = v_states.reshape([v_states.shape[0]])
         lastgaelam = 0
         for t in reversed(range(Config.buffer_size)):
             if t == Config.buffer_size - 1:
@@ -98,8 +57,11 @@ class PPO() :
             delta = rewards[t] + Config.gamma * nextvalues * nextnonterminal - v_states[t]
             advantages[t] = lastgaelam = delta + Config.gamma * Config.gae * nextnonterminal * lastgaelam
         
-        values = np.asarray(rewards, dtype=np.float32)
         discounted_rewards = advantages + v_states
+
+        v_states = v_states.reshape(v_states.shape[0],1)
+        advantages = advantages.reshape([advantages.shape[0],1])
+        discounted_rewards = discounted_rewards.reshape([discounted_rewards.shape[0],1])
 
         return discounted_rewards,advantages,v_states
 
@@ -114,25 +76,9 @@ class PPO() :
             state = self.preprocess(state,next_state)
             batch_states.append(state) 
 
-            if(self.env.is_discrete) :
-                if(Config.policy_type == 'actor_critic') :
-                    actions_probs = self.actor_critic.predict_action(np.expand_dims(state,axis=0))
-                else :
-                    actions_probs = self.actor.predict(np.expand_dims(state,axis=0))
-                actions_probs = actions_probs.reshape([actions_probs.shape[1]])
-                action = np.random.choice(range(len(actions_probs)),p=actions_probs)
-                current_action = np.zeros(shape=actions_probs.shape)
-                current_action[action] = 1
-                
-                actions.append(current_action)
-                batch_actions_probs.append(actions_probs)
-            else :
-                action,action_probs = self.actor.predict(np.expand_dims(state,axis=0))
-                action = action.reshape([action.shape[1]])
-                action_probs = action_probs.reshape([action_probs.shape[1]])
-                actions.append(action)
-                batch_actions_probs.append(action_probs)
-
+            action,action_probs = self.actor_critic.predict_action(np.expand_dims(state,axis=0))
+            actions.append(action)
+            batch_actions_probs.append(action_probs)
             
             next_state,reward,done,_ = self.env.step(action)
             dones.append(done)
@@ -156,7 +102,7 @@ class PPO() :
 
         batch_rewards,batch_advantages,v_states = self.get_discounted_rewards_gae(batch_states,batch_rewards,dones)
 
-        batch = [np.array(batch_states),np.array(batch_rewards),np.array(actions),np.array(batch_actions_probs),np.array(batch_advantages),np.array(v_states)]
+        batch = [np.array(batch_states),batch_rewards,np.array(actions),np.array(batch_actions_probs),batch_advantages,v_states]
         
         if(current_timestep >= Config.timesteps) :
             end = True
@@ -249,7 +195,7 @@ class PPO() :
         episode = 0
         while(True) :
             batch,end,current_timestep,total_rewards,state,next_state,episode = self.collect_batch(state,next_state,total_rewards,current_timestep,episode)
-            self.update_networks(batch,current_timestep)
+            self.actor_critic.train(batch,current_timestep)
             if(end) :
                 break
 
