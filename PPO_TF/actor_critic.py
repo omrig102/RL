@@ -50,6 +50,7 @@ class ActorCritic() :
             self.calc_loss(self.probs,self.old_probs)
 
     def build_network_continuous(self) :
+        self.lr = tf.placeholder(shape=[],dtype=tf.float32,name='lr')
         self.advantage = tf.placeholder(shape=[None,1],dtype=tf.float32,name='advantage')
         self.old_probs = tf.placeholder(shape=[None,self.output_size],dtype=tf.float32,name='old_prob')
         self.reward = tf.placeholder(shape=[None,1],dtype=tf.float32,name='reward')
@@ -158,7 +159,7 @@ class ActorCritic() :
             action_probs = self.sess.run(self.probs,feed_dict={self.state:state,self.action:action})
             
 
-        return action,action_probs
+        return action[0],action_probs[0]
 
     def train(self,batch,current_timestep) :
         current_update = current_timestep / Config.buffer_size
