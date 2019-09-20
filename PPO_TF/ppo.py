@@ -20,7 +20,7 @@ class PPO() :
         if(Config.start_timestep > 0) :
             Config.load()
         self.env = Config.env.clone()
-        self.actor_critic = ActorCritic(sess,self.env.get_input_size(),self.env.get_output_size(),self.env.is_discrete,'actor_critic')
+        self.actor_critic = ActorCritic(sess,self.env.get_input_size(),self.env.get_output_size(),self.env.is_discrete)
         init = tf.global_variables_initializer()
         sess.run(init)
         

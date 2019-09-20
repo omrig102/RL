@@ -7,7 +7,7 @@ import pickle
 class Config() :
 
     #game = 'SuperMarioBros-v0'
-    game = 'Breakout-v0'
+    game = 'BipedalWalker-v2'
     root_dir = '.'
     log_dir = 'logs'
     with_summary = True
@@ -17,26 +17,26 @@ class Config() :
     save_video_interval = 10
     save_rate = 10
     log_episodes = 10
-    batch_size = 32
-    buffer_size = 512
-    epochs = 4
+    batch_size = 64
+    buffer_size = 2048
+    epochs = 10
     gradient_clip = 0.5
-    epsilon=0.1
-    min_epsilon = 0.1
-    entropy = 0.01
+    epsilon=0.2
+    min_epsilon = 0.2
+    entropy = 0.0
     gae = 0.95
     gamma = 0.99
     reward_scaler = 'sign'
+    actor_critic_type = 'seperate'
     
-    critic_learning_rate = lambda f : f * 2.5e-4
-    actor_learning_rate = lambda f : f * 2.5e-4
+    critic_learning_rate = lambda f: 3e-4 * f
+    actor_learning_rate = lambda f: 3e-4 * f
     use_shuffle = True
-    use_pixels = True
+    use_pixels = False
     if(use_pixels) :
         resized_height = 48
         resized_width = 48
-    network_type = 'conv2d'
-    policy_type = 'actor_critic'
+    network_type = 'mlp'
     #mlp
     mlp_hidden_layers = 1
     mlp_hidden_units = [512]
