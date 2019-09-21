@@ -196,13 +196,11 @@ class ActorCritic() :
             action_probs = self.sess.run(self.action_outputs,feed_dict={self.state:state})
             action_probs = action_probs.reshape([action_probs.shape[1]])
             action = np.random.choice(range(len(action_probs)),p=action_probs)
-            
+            return action,action_probs
         else :
             action = self.sess.run(self.action,feed_dict={self.state:state})
             action_probs = self.sess.run(self.probs,feed_dict={self.state:state,self.action:action})
-            
-
-        return action[0],action_probs[0]
+            return action[0],action_probs[0]
 
     def train(self,batch,current_timestep) :
         #current_update = current_timestep / Config.buffer_size
