@@ -203,11 +203,11 @@ class ActorCritic() :
             return action[0],action_probs[0]
 
     def train(self,batch,current_timestep) :
-        #current_update = current_timestep / Config.buffer_size
-        #total_updates = Config.timesteps / Config.buffer_size
-        #frac = 1.0 - (current_update - 1.0) / total_updates
-        #lr = Config.actor_learning_rate(frac)
-        lr = Config.actor_learning_rate
+        current_update = current_timestep / Config.buffer_size
+        total_updates = Config.timesteps / Config.buffer_size
+        frac = 1.0 - (current_update - 1.0) / total_updates
+        lr = Config.actor_learning_rate(frac)
+        #lr = Config.actor_learning_rate
         states,rewards,actions,old_probs,advantages,old_preds = batch
 
         advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-6)
