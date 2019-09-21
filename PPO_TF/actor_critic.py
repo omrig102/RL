@@ -115,12 +115,12 @@ class ActorCritic() :
         
         if(Config.actor_critic_type == 'seperate') :
             with tf.variable_scope('actor') as s:
-                base_network = self.build_actor_continuous()
+                base_network = self.build_actor_discrete()
             with tf.VariableScope('critic') as s:
                 self.build_critic(base_network)
         else :
             with tf.variable_scope('actor_critic') as s:
-                base_network = self.build_actor_continuous()
+                base_network = self.build_actor_discrete()
                 self.build_critic(base_network)
 
     def build_base_network(self,x,output_size=None,output_activation=None,output_name=None) :
