@@ -102,7 +102,7 @@ class ActorCritic() :
             base_network_value = self.build_base_network(self.state)
         else :
             base_network_value = base_network
-        self.value_outputs = tf.layers.dense(base_network,units=1,activation=None,kernel_initializer=tf.orthogonal_initializer(np.sqrt(2)),name='value_outputs')
+        self.value_outputs = tf.layers.dense(base_network_value,units=1,activation=None,kernel_initializer=tf.orthogonal_initializer(np.sqrt(2)),name='value_outputs')
 
     def build_network_discrete(self) :
         self.lr = tf.placeholder(shape=[],dtype=tf.float32,name='lr')
@@ -138,11 +138,8 @@ class ActorCritic() :
         else :
             raise Exception('Unable to create base network,check config')
 
-    def clip_by_global_norm(self,loss,optimizer,clip) :
-        if(Config.actor_critic_type == 'seperate') :
-            params = tf.trainable_variables('actor') + tf.trainable_variables('critic')
-        else :
-            params = tf.trainable_variables('actor_critic')
+    def clip_by_global_norm(self,loss,optimizer,clip,scope) :
+        params = tf.trainable_variables(scope)
         gradients, variables = zip(*optimizer.compute_gradients(loss,params))
         gradients, _ = tf.clip_by_global_norm(gradients, clip)
         optimize = optimizer.apply_gradients(zip(gradients, variables))
@@ -154,24 +151,37 @@ class ActorCritic() :
         policy_clipped = -tf.clip_by_value(ratio,1-Config.epsilon,1+Config.epsilon) * self.advantage
         policy_loss = tf.reduce_mean(tf.maximum(policy_unclipped,policy_clipped))
         
-        value_clipped = self.old_preds + tf.clip_by_value(self.value_outputs - self.old_preds, - Config.epsilon, Config.epsilon)
-        value_loss_unclipped = tf.square(self.value_outputs - self.reward)
-        value_loss_clipped = tf.square(value_clipped - self.reward)
+        #value_clipped = self.old_preds + tf.clip_by_value(self.value_outputs - self.old_preds, - Config.epsilon, Config.epsilon)
+        #value_loss_unclipped = tf.square(self.value_outputs - self.reward)
+        #value_loss_clipped = tf.square(value_clipped - self.reward)
         
-        value_loss = 0.5 * tf.reduce_mean(tf.maximum(value_loss_unclipped, value_loss_clipped))
+        #value_loss = 0.5 * tf.reduce_mean(tf.maximum(value_loss_unclipped, value_loss_clipped))
         
         entropy = -tf.reduce_mean(tf.reduce_sum(action_prob * tf.log(tf.maximum(action_prob,1e-10)), 1),0)
+        if(Config.actor_critic_type == 'seperate') :
+            actor_loss = policy_loss - Config.entropy * entropy
+            value_loss = 0.5 * tf.reduce_mean(tf.square(self.value_outputs - self.reward))
+            actor_optimizer = tf.train.AdamOptimizer(learning_rate=self.lr)
+            actor_optimizer = self.clip_by_global_norm(actor_loss,actor_optimizer,Config.gradient_clip,'actor')
+            critic_optimizer = tf.train.AdamOptimizer(learning_rate=self.lr)
+            critic_optimizer = self.clip_by_global_norm(value_loss,critic_optimizer,Config.gradient_clip,'critic')
+            self.optimizer = [actor_optimizer,critic_optimizer]
+        else :
+            value_clipped = self.old_preds + tf.clip_by_value(self.value_outputs - self.old_preds, - Config.epsilon, Config.epsilon)
+            value_loss_unclipped = tf.square(self.value_outputs - self.reward)
+            value_loss_clipped = tf.square(value_clipped - self.reward)
+        
+            value_loss = 0.5 * tf.reduce_mean(tf.maximum(value_loss_unclipped, value_loss_clipped))
+            loss = policy_loss - Config.entropy * entropy + value_loss * 0.5
 
-        loss = policy_loss - Config.entropy * entropy + value_loss * 0.5
-
-        optimizer = tf.train.AdamOptimizer(learning_rate=self.lr)
-        self.optimizer = self.clip_by_global_norm(loss,optimizer,Config.gradient_clip)
+            optimizer = tf.train.AdamOptimizer(learning_rate=self.lr)
+            self.optimizer = self.clip_by_global_norm(loss,optimizer,Config.gradient_clip,'actor_critic')
 
         if(Config.with_summary) :
             self.policy_loss_summary = tf.summary.scalar(name='policy_loss', tensor=policy_loss)
             self.value_loss_summary = tf.summary.scalar(name='value_loss', tensor=value_loss)
             self.entropy_summary = tf.summary.scalar(name='entropy', tensor=entropy)
-            self.loss_summary = tf.summary.scalar(name='loss', tensor=loss)
+            #self.loss_summary = tf.summary.scalar(name='loss', tensor=loss)
 
 
 
@@ -195,10 +205,11 @@ class ActorCritic() :
         return action[0],action_probs[0]
 
     def train(self,batch,current_timestep) :
-        current_update = current_timestep / Config.buffer_size
-        total_updates = Config.timesteps / Config.buffer_size
-        frac = 1.0 - (current_update - 1.0) / total_updates
-        lr = Config.actor_learning_rate(frac)
+        #current_update = current_timestep / Config.buffer_size
+        #total_updates = Config.timesteps / Config.buffer_size
+        #frac = 1.0 - (current_update - 1.0) / total_updates
+        #lr = Config.actor_learning_rate(frac)
+        lr = Config.actor_learning_rate
         states,rewards,actions,old_probs,advantages,old_preds = batch
 
         advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-6)
@@ -211,13 +222,13 @@ class ActorCritic() :
                 
                 batch_states,batch_advantages,batch_old_probs,batch_actions,batch_rewards,batch_old_preds = self.prepare_batch(states,advantages,old_probs,actions,rewards,old_preds,index,randomize)
                 if(Config.with_summary) :
-                    policy_loss_t,value_loss_t,entropy_t,loss,_ = self.sess.run([self.policy_loss_summary,self.value_loss_summary,self.entropy_summary,self.loss_summary,self.optimizer],feed_dict={self.state:batch_states,self.advantage:batch_advantages
+                    policy_loss_t,value_loss_t,entropy_t,_ = self.sess.run([self.policy_loss_summary,self.value_loss_summary,self.entropy_summary,self.optimizer],feed_dict={self.state:batch_states,self.advantage:batch_advantages
                         ,self.old_probs:batch_old_probs,self.action:batch_actions,self.reward:batch_rewards,self.old_preds:batch_old_preds,self.lr:lr})
                     if(index == int(Config.buffer_size/Config.batch_size)-1 and epoch == Config.epochs-1) :
                         self.writer.add_summary(policy_loss_t)
                         self.writer.add_summary(value_loss_t)
                         self.writer.add_summary(entropy_t)
-                        self.writer.add_summary(loss)
+                        #self.writer.add_summary(loss)
                 else :
                     self.sess.run(self.optimizer,feed_dict={self.state:batch_states,self.advantage:batch_advantages
                         ,self.old_probs:batch_old_probs,self.action:batch_actions,self.reward:batch_rewards,self.old_preds:batch_old_preds,self.lr:lr})

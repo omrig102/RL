@@ -14,23 +14,23 @@ class Config() :
     timesteps = 2e7
     start_timestep = 0
     save_video = True
-    save_video_interval = 10
-    save_rate = 10
-    log_episodes = 10
-    batch_size = 64
-    buffer_size = 2048
+    save_video_interval = 100
+    save_rate = 100
+    log_episodes = 100
+    batch_size = 1024
+    buffer_size = 4096
     epochs = 10
-    gradient_clip = 0.5
+    gradient_clip = 10
     epsilon=0.2
     min_epsilon = 0.2
     entropy = 0.0
     gae = 0.95
     gamma = 0.99
-    reward_scaler = 'sign'
+    reward_scaler = 'scale'
     actor_critic_type = 'seperate'
     
-    critic_learning_rate = lambda f: 3e-4 * f
-    actor_learning_rate = lambda f: 3e-4 * f
+    critic_learning_rate = 0.0001
+    actor_learning_rate = 0.0001
     use_shuffle = True
     use_pixels = False
     if(use_pixels) :
@@ -38,8 +38,8 @@ class Config() :
         resized_width = 48
     network_type = 'mlp'
     #mlp
-    mlp_hidden_layers = 1
-    mlp_hidden_units = [512]
+    mlp_hidden_layers = 2
+    mlp_hidden_units = [128,128]
     #lstm
     if(network_type == 'lstm') :
         lstm_layers = 1
